@@ -3,6 +3,7 @@
 namespace nyansapow\plugins\contrib\responsive_images;
 
 use ntentan\utils\exceptions\FileAlreadyExistsException;
+use ntentan\utils\exceptions\FileNotWriteableException;
 use ntentan\utils\Filesystem;
 use nyansapow\events\PluginsInitialized;
 use nyansapow\events\ThemeLoaded;
@@ -57,39 +58,17 @@ class ResponsiveImagesPlugin extends Plugin
         return $sizes;
     }
 
-//    private function generateExponentialImages($site, $image)
-//    {
-//        $sizes = [];
-//
-//        $width = $image->getImageWidth();
-//        $aspect = $width / $image->getImageHeight();
-//        $min = $this->getOption('min_width', 300);
-//        $max = $this->getOption('max_width', $width);
-//        $rate = $this->getOption('exponential_rate', 0.8);
-//
-//        $startX = log($max - $min) / log($rate);
-//        $step = (0 - $startX) / $this->getOption('num_steps', 5);
-//
-//        for ($i = $startX; $i < 0; $i += $step) {
-//            $newWidth = $max - pow($rate, $i);
-//            $jpeg = $this->writeImage($site, $image, $newWidth, 'jpeg', $aspect);
-//            $webp = $this->writeImage($site, $image, $newWidth, 'webp', $aspect);
-//            $sizes[] = ['src_jpeg' => $jpeg, 'src_webp' => $webp, 'max_width' => $newWidth];
-//        }
-//
-//    }
-
     /**
      * @param AbstractSite $site
      * @param $page
      * @return \Closure
-     * @throws \ntentan\utils\exceptions\FileNotWriteableException
+     * @throws FileNotWriteableException
      */
     public function generateResponsiveImageMarkup($site, $page)
     {
-        $dir = Filesystem::directory($this->getOption('image_path', 'np_images/responsive_images/'));
+        $outputDir = Filesystem::directory($site->getSourcePath($this->getOption('image_path', 'np_images/responsive_images/')));
         try{
-            $dir->create();
+            $outputDir->create();
         } catch(FileAlreadyExistsException $e) {
 
         }
@@ -97,7 +76,7 @@ class ResponsiveImagesPlugin extends Plugin
             $filename = $site->getSourcePath("np_images/{$matches['image']}");
 
             if(!\file_exists($filename)) {
-                $this->errOut("File {$filename} does not exist.");
+                $this->errOut("File {$filename} does not exist.\n");
                 return "File {$filename} does not exist.";
             }
 
@@ -125,13 +104,17 @@ class ResponsiveImagesPlugin extends Plugin
     {
         $filename = substr($image->getImageFilename(), strlen($site->getSourcePath("np_images")) + 1);
         $image = $image->clone();
-        $image->scaleImage($width, $width / $aspect);
         $width = round($width);
-        $filename = $site->getDestinationPath(
+        $filename = $site->getSourcePath(
             $this->getOption('image_path', 'np_images/responsive_images/') .
             str_replace("/", "-", $filename) . "@{$width}px.$format"
         );
+        if(file_exists($filename) && filemtime($image->getImageFilename()) < filemtime($filename)) {
+            return $filename;
+        }
+        $image->scaleImage($width, $width / $aspect);
         $image->setImageCompressionQuality(90);
+        $this->stdOut("Writing image $filename\n");
         $image->writeImage($filename);
 
         return $filename;
