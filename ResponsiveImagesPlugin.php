@@ -49,9 +49,9 @@ class ResponsiveImagesPlugin extends Plugin
         
         for ($i = $min; $i <= $max; $i += $step) {
             $jpeg = $this->writeImage($site, $image, $i, 'jpeg', $aspect);
-            $jpeg = substr($jpeg, strlen($site->getDestinationPath("")));
+            $jpeg = substr($jpeg, strlen($site->getSourcePath("")));
             $webp = $this->writeImage($site, $image, $i, 'webp', $aspect);
-            $webp = substr($webp, strlen($site->getDestinationPath("")));
+            $webp = substr($webp, strlen($site->getSourcemrPath("")));
             $sizes[] = ['src_jpeg' => $jpeg, 'src_webp' => $webp, 'max_width' => $i];
         }
 
