@@ -2,9 +2,11 @@
 
 namespace nyansapow\plugins\contrib\responsive_images;
 
+use clearice\io\Io;
 use ntentan\utils\exceptions\FileAlreadyExistsException;
 use ntentan\utils\exceptions\FileNotWriteableException;
 use ntentan\utils\Filesystem;
+use nyansapow\events\PageOutputGenerated;
 use nyansapow\events\PluginsInitialized;
 use nyansapow\events\ThemeLoaded;
 use nyansapow\Plugin;
@@ -19,15 +21,64 @@ class ResponsiveImagesPlugin extends Plugin
     {
         return [
             PluginsInitialized::class => [$this, 'registerParser'],
-            ThemeLoaded::class => [$this, 'registerTemplates']
+            ThemeLoaded::class => [$this, 'registerTemplates'],
+            PageOutputGenerated::class => [$this, 'processMarkup']
         ];
+    }
+
+    public function processMarkup(PageOutputGenerated $event)
+    {
+        $content = $event->getOutput();
+        $dom = new \DOMDocument();
+        @$dom->loadHTML($content);
+        $xpath = new \DOMXPath($dom);
+        $imgs = $xpath->query("//img[@fn-responsive]");
+
+        if($imgs->length == 0) {
+            return;
+        }
+
+        $site = $event->getSite();
+        $page = $event->getPage();
+        $this->makeImageDirectory($site);
+        $altered = false;
+
+        /** @var $img \DOMNode */
+        foreach ($imgs as $img) {
+            $sitePath = $site->getTemplateData($site->getDestinationPath($page->getDestination()))['site_path'];
+            $src = $img->attributes->getNamedItem("src");
+            $alt = $img->attributes->getNamedItem("alt");
+
+            if(!$src) {
+                $this->errOut("src attribute of <img> tag cannot be empty on page targeted for \"{$page->getDestination()}\"\n", Io::OUTPUT_LEVEL_1);
+                continue;
+            }
+
+            $src = substr($src->nodeValue, strlen($sitePath));
+            $markup = $this->generateResponsiveImageMarkup($site, $page, $src, $alt ? $alt->nodeValue : "");
+            $newDom = new \DOMDocument();
+            @$newDom->loadHTML($markup);
+            $pictureElement = $newDom->getElementsByTagName('picture');
+
+            if($pictureElement->length > 0) {
+                $pictureElement = $pictureElement->item(0);
+                $pictureElement = $dom->importNode($pictureElement, true);
+            } else {
+                $pictureElement = $dom->createTextNode($markup);
+            }
+
+            $img->parentNode->replaceChild($pictureElement, $img);
+            $altered = true;
+        }
+
+        $event->setOutput($altered ? $dom->saveHTML() : $content);
     }
 
     public function registerParser(PluginsInitialized $event)
     {
         $event->getTagParser()->registerTag(
             "/(?<image>.*\.(jpeg|jpg|png|gif|webp))\s*(\|'?(?<alt>[a-zA-Z0-9 ,.-]*)'?)?/",
-            0, [$this, 'generateResponsiveImageMarkup']
+            0, [$this, 'getMarkupGenerator']
         );
     }
 
@@ -51,11 +102,42 @@ class ResponsiveImagesPlugin extends Plugin
             $jpeg = $this->writeImage($site, $image, $i, 'jpeg', $aspect);
             $jpeg = substr($jpeg, strlen($site->getSourcePath("")));
             $webp = $this->writeImage($site, $image, $i, 'webp', $aspect);
-            $webp = substr($webp, strlen($site->getSourcemrPath("")));
+            $webp = substr($webp, strlen($site->getSourcePath("")));
             $sizes[] = ['src_jpeg' => $jpeg, 'src_webp' => $webp, 'max_width' => $i];
         }
 
         return $sizes;
+    }
+
+    private function makeImageDirectory(AbstractSite $site) : void
+    {
+        $outputDir = Filesystem::directory($site->getSourcePath($this->getOption('image_path', 'np_images/responsive_images/')));
+        try{
+            $outputDir->create();
+        } catch(FileAlreadyExistsException $e) {
+
+        }
+    }
+
+    private function generateResponsiveImageMarkup($site, $page, $image, $alt)
+    {
+        $filename = $site->getSourcePath($image); //"np_images/{$matches['image']}");
+
+        if(!\file_exists($filename)) {
+            $this->errOut("File {$filename} does not exist.\n");
+            return "Responsive Image Plugin: File [{$filename}] does not exist.";
+        }
+
+        $image = new \Imagick($filename);
+        $templateVariables = $site->getTemplateData($site->getDestinationPath($page->getDestination()));
+        $args = [
+            'sources' => $this->generateLinearSteppedImages($site, $image),
+            'image_path' => $image, 'alt' => $alt,
+            'site_path' => $templateVariables['site_path']
+        ];
+
+        return $this->templateEngine->render('responsive_images', $args);
+
     }
 
     /**
@@ -64,31 +146,11 @@ class ResponsiveImagesPlugin extends Plugin
      * @return \Closure
      * @throws FileNotWriteableException
      */
-    public function generateResponsiveImageMarkup($site, $page)
+    public function getMarkupGenerator($site, $page)
     {
-        $outputDir = Filesystem::directory($site->getSourcePath($this->getOption('image_path', 'np_images/responsive_images/')));
-        try{
-            $outputDir->create();
-        } catch(FileAlreadyExistsException $e) {
-
-        }
+        $this->makeImageDirectory($site);
         return function ($matches) use ($site, $page) {
-            $filename = $site->getSourcePath("np_images/{$matches['image']}");
-
-            if(!\file_exists($filename)) {
-                $this->errOut("File {$filename} does not exist.\n");
-                return "File {$filename} does not exist.";
-            }
-
-            $image = new \Imagick($filename);
-            $templateVariables = $site->getTemplateData($site->getDestinationPath($page->getDestination()));
-            $args = [
-                'sources' => $this->generateLinearSteppedImages($site, $image),
-                'image_path' => "np_images/{$matches['image']}", 'alt' => $matches['alt'],
-                'site_path' => $templateVariables['site_path']
-            ];
-
-            return $this->templateEngine->render('responsive_images', $args);
+            return $this->generateResponsiveImageMarkup($site, $page, "np_images/{$matches['image']}", $matches['alt']);
         };
     }
 
