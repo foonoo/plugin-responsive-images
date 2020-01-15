@@ -123,9 +123,6 @@ class ResponsiveImagesPlugin extends Plugin
     {
         $filename = $site->getSourcePath($imagePath); 
 
-        $pattern = $site->getDestinationPath("np_images/responsive_images/" . str_replace("/", "-", substr($filename, strlen($site->getSourcePath("np_images")) + 1)) . "*");
-        var_dump($pattern);
-
         if(!\file_exists($filename)) {
             $this->errOut("File {$filename} does not exist.\n");
             return "Responsive Image Plugin: File [{$filename}] does not exist.";
