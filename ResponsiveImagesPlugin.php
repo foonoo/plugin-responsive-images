@@ -119,9 +119,12 @@ class ResponsiveImagesPlugin extends Plugin
         }
     }
 
-    private function generateResponsiveImageMarkup($site, $page, $image, $alt)
+    private function generateResponsiveImageMarkup($site, $page, $imagePath, $alt)
     {
-        $filename = $site->getSourcePath($image); //"np_images/{$matches['image']}");
+        $filename = $site->getSourcePath($imagePath); 
+
+        $pattern = $site->getDestinationPath("np_images/responsive_images/" . str_replace("/", "-", substr($filename, strlen($site->getSourcePath("np_images")) + 1)) . "*");
+        var_dump($pattern);
 
         if(!\file_exists($filename)) {
             $this->errOut("File {$filename} does not exist.\n");
@@ -129,10 +132,11 @@ class ResponsiveImagesPlugin extends Plugin
         }
 
         $image = new \Imagick($filename);
+        $this->stdOut("Generating responsive images for {$filename}\n", Io::OUTPUT_LEVEL_1);
         $templateVariables = $site->getTemplateData($site->getDestinationPath($page->getDestination()));
         $args = [
             'sources' => $this->generateLinearSteppedImages($site, $image),
-            'image_path' => $image, 'alt' => $alt,
+            'image_path' => $imagePath, 'alt' => $alt,
             'site_path' => $templateVariables['site_path']
         ];
 
@@ -165,8 +169,6 @@ class ResponsiveImagesPlugin extends Plugin
     private function writeImage($site, $image, $width, $format, $aspect)
     {
         $filename = substr($image->getImageFilename(), strlen($site->getSourcePath("np_images")) + 1);
-        $image = $image->clone();
-        $width = round($width);
         $filename = $site->getSourcePath(
             $this->getOption('image_path', 'np_images/responsive_images/') .
             str_replace("/", "-", $filename) . "@{$width}px.$format"
@@ -174,6 +176,8 @@ class ResponsiveImagesPlugin extends Plugin
         if(file_exists($filename) && filemtime($image->getImageFilename()) < filemtime($filename)) {
             return $filename;
         }
+        $image = $image->clone();
+        $width = round($width);
         $image->scaleImage($width, $width / $aspect);
         $image->setImageCompressionQuality(90);
         $this->stdOut("Writing image $filename\n");
