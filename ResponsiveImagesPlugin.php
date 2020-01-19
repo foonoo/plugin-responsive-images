@@ -121,24 +121,28 @@ class ResponsiveImagesPlugin extends Plugin
 
     private function generateResponsiveImageMarkup($site, $page, $imagePath, $alt)
     {
-        $filename = $site->getSourcePath($imagePath); 
+        return $site->getCache()->get("responsive-image:$imagePath", 
+            function() use($site, $page, $imagePath, $alt) {
+                $filename = $site->getSourcePath($imagePath); 
 
-        if(!\file_exists($filename)) {
-            $this->errOut("File {$filename} does not exist.\n");
-            return "Responsive Image Plugin: File [{$filename}] does not exist.";
-        }
-
-        $image = new \Imagick($filename);
-        $this->stdOut("Generating responsive images for {$filename}\n", Io::OUTPUT_LEVEL_1);
-        $templateVariables = $site->getTemplateData($site->getDestinationPath($page->getDestination()));
-        $args = [
-            'sources' => $this->generateLinearSteppedImages($site, $image),
-            'image_path' => $imagePath, 'alt' => $alt,
-            'site_path' => $templateVariables['site_path']
-        ];
-
-        return $this->templateEngine->render('responsive_images', $args);
-
+                if(!\file_exists($filename)) {
+                    $this->errOut("File {$filename} does not exist.\n");
+                    return "Responsive Image Plugin: File [{$filename}] does not exist.";
+                }
+        
+                $image = new \Imagick($filename);
+                $this->stdOut("Generating responsive images for {$filename}\n", Io::OUTPUT_LEVEL_1);
+                $templateVariables = $site->getTemplateData($site->getDestinationPath($page->getDestination()));
+                $args = [
+                    'sources' => $this->generateLinearSteppedImages($site, $image),
+                    'image_path' => $imagePath, 'alt' => $alt,
+                    'site_path' => $templateVariables['site_path']
+                ];
+        
+                return $this->templateEngine->render('responsive_images', $args);    
+            },
+            filemtime($imagePath)
+        );
     }
 
     /**
