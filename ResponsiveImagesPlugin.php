@@ -106,7 +106,7 @@ class ResponsiveImagesPlugin extends Plugin
             $sizes[] = ['src_jpeg' => $jpeg, 'src_webp' => $webp, 'max_width' => $i];
         }
 
-        return $sizes;
+        return [$sizes, $jpeg];
     }
 
     private function makeImageDirectory(AbstractSite $site) : void
@@ -121,7 +121,7 @@ class ResponsiveImagesPlugin extends Plugin
 
     private function generateResponsiveImageMarkup($site, $page, $imagePath, $alt)
     {
-        return $site->getCache()->get("responsive-image:$imagePath", 
+        return $site->getCache()->get("responsive-image:$imagePath:{$page->getDestination()}", 
             function() use($site, $page, $imagePath, $alt) {
                 $filename = $site->getSourcePath($imagePath); 
 
@@ -133,15 +133,22 @@ class ResponsiveImagesPlugin extends Plugin
                 $image = new \Imagick($filename);
                 $this->stdOut("Generating responsive images for {$filename}\n", Io::OUTPUT_LEVEL_1);
                 $templateVariables = $site->getTemplateData($site->getDestinationPath($page->getDestination()));
+                list($sources, $defaultImage) = $this->generateLinearSteppedImages($site, $image);
+
+                $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+                if($extension == 'jpeg' || $extension == 'jpg') {
+                    $defaultImage = $imagePath;
+                }
+
                 $args = [
-                    'sources' => $this->generateLinearSteppedImages($site, $image),
-                    'image_path' => $imagePath, 'alt' => $alt,
+                    'sources' => $sources,
+                    'image_path' => $defaultImage, 'alt' => $alt,
                     'site_path' => $templateVariables['site_path']
                 ];
         
                 return $this->templateEngine->render('responsive_images', $args);    
             },
-            filemtime($imagePath)
+            file_exists($imagePath) ? filemtime($imagePath) : 0
         );
     }
 
@@ -180,7 +187,7 @@ class ResponsiveImagesPlugin extends Plugin
         $image = $image->clone();
         $width = round($width);
         $image->scaleImage($width, $width / $aspect);
-        $image->setImageCompressionQuality(90);
+        $image->setImageCompressionQuality($this->getOption("compression_quality", 75));
         $this->stdOut("Writing image $filename\n");
         $image->writeImage($filename);
 
