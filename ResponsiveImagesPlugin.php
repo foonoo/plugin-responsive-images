@@ -4,10 +4,11 @@ namespace nyansapow\plugins\contrib\responsive_images;
 
 use clearice\io\Io;
 use ntentan\utils\exceptions\FileAlreadyExistsException;
-use ntentan\utils\exceptions\FileNotWriteableException;
 use ntentan\utils\Filesystem;
 use nyansapow\events\PageOutputGenerated;
+use nyansapow\events\PageWriteStarted;
 use nyansapow\events\PluginsInitialized;
+use nyansapow\events\SiteWriteStarted;
 use nyansapow\events\ThemeLoaded;
 use nyansapow\Plugin;
 use nyansapow\sites\AbstractSite;
@@ -16,14 +17,29 @@ use nyansapow\sites\AbstractSite;
 class ResponsiveImagesPlugin extends Plugin
 {
     private $templateEngine;
+    private $site;
+    private $page;
 
     public function getEvents()
     {
         return [
             PluginsInitialized::class => [$this, 'registerParser'],
             ThemeLoaded::class => [$this, 'registerTemplates'],
-            PageOutputGenerated::class => [$this, 'processMarkup']
+            PageOutputGenerated::class => [$this, 'processMarkup'],
+            SiteWriteStarted::class => [$this, 'setActiveSite'],
+            PageWriteStarted::class => [$this, 'setActivePage']
         ];
+    }
+
+    public function setActiveSite(SiteWriteStarted $event)
+    {
+        $this->site = $event->getSite();
+        $this->makeImageDirectory($this->site);
+    }
+
+    public function setActivePage(PageWriteStarted $event)
+    {
+        $this->page = $event->getContent();
     }
 
     public function processMarkup(PageOutputGenerated $event)
@@ -55,7 +71,7 @@ class ResponsiveImagesPlugin extends Plugin
             }
 
             $src = substr($src->nodeValue, strlen($sitePath));
-            $markup = $this->generateResponsiveImageMarkup($site, $page, $src, $alt ? $alt->nodeValue : "");
+            $markup = $this->generateResponsiveImageMarkup($page, $src, $alt ? $alt->nodeValue : "");
             $newDom = new \DOMDocument();
             @$newDom->loadHTML($markup);
             $pictureElement = $newDom->getElementsByTagName('picture');
@@ -97,13 +113,21 @@ class ResponsiveImagesPlugin extends Plugin
         $min = $this->getOption('min_width', 300);
         $max = $this->getOption('max_width', $width);
         $step = ($max - $min) / $this->getOption('num_steps', 5);
+        $lenSourcePath = strlen($site->getSourcePath(""));
         
         for ($i = $min; $i <= $max; $i += $step) {
-            $jpeg = $this->writeImage($site, $image, $i, 'jpeg', $aspect);
-            $jpeg = substr($jpeg, strlen($site->getSourcePath("")));
-            $webp = $this->writeImage($site, $image, $i, 'webp', $aspect);
-            $webp = substr($webp, strlen($site->getSourcePath("")));
-            $sizes[] = ['src_jpeg' => $jpeg, 'src_webp' => $webp, 'max_width' => $i];
+            $size = round($i);
+            $jpegs = [];
+            $webps = [];
+            $jpeg = substr($this->writeImage($site, $image, $size, 'jpeg', $aspect), $lenSourcePath);
+            $jpegs[]= [$jpeg];
+            $webps[]= [substr($this->writeImage($site, $image, $size, 'webp', $aspect), $lenSourcePath)];
+
+            if($this->getOption('hidpi', false) && $size * 2 < $max) {
+                $jpegs[]= [substr($this->writeImage($site, $image, $size * 2, 'jpeg', $aspect), $lenSourcePath), 2];
+                $webps[]= [substr($this->writeImage($site, $image, $size * 2, 'webp', $aspect), $lenSourcePath), 2];    
+            }
+            $sizes[] = ['jpeg_srcset' => $jpegs, 'webp_srcset' => $webps, 'max_width' => $size];
         }
 
         return [$sizes, $jpeg];
@@ -119,9 +143,10 @@ class ResponsiveImagesPlugin extends Plugin
         }
     }
 
-    private function generateResponsiveImageMarkup($site, $page, $imagePath, $alt)
+    private function generateResponsiveImageMarkup($page, $imagePath, $alt)
     {
-        return $site->getCache()->get("responsive-image:$imagePath:{$page->getDestination()}", 
+        $site = $this->site;
+        return $site->getCache()->get("responsive-image:$imagePath:{$page->getDestination()}",
             function() use($site, $page, $imagePath, $alt) {
                 $filename = $site->getSourcePath($imagePath); 
 
@@ -132,7 +157,7 @@ class ResponsiveImagesPlugin extends Plugin
         
                 $image = new \Imagick($filename);
                 $this->stdOut("Generating responsive images for {$filename}\n", Io::OUTPUT_LEVEL_1);
-                $templateVariables = $site->getTemplateData($site->getDestinationPath($page->getDestination()));
+                $templateVariables = $site->getTemplateData($page->getFullDestination());
                 list($sources, $defaultImage) = $this->generateLinearSteppedImages($site, $image);
 
                 $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
@@ -153,17 +178,12 @@ class ResponsiveImagesPlugin extends Plugin
     }
 
     /**
-     * @param AbstractSite $site
-     * @param $page
-     * @return \Closure
-     * @throws FileNotWriteableException
+     * @param $matches
+     * @return string
      */
-    public function getMarkupGenerator($site, $page)
+    public function getMarkupGenerator($matches)
     {
-        $this->makeImageDirectory($site);
-        return function ($matches) use ($site, $page) {
-            return $this->generateResponsiveImageMarkup($site, $page, "np_images/{$matches['image']}", $matches['alt']);
-        };
+        return $this->generateResponsiveImageMarkup($this->page, "np_images/{$matches['image']}", $matches['alt']);
     }
 
     /**
