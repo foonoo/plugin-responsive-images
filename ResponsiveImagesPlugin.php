@@ -146,7 +146,7 @@ class ResponsiveImagesPlugin extends Plugin
     private function generateResponsiveImageMarkup($page, $imagePath, $alt)
     {
         $site = $this->site;
-        return $site->getCache()->get("responsive-image:$imagePath:{$page->getDestination()}",
+        return $site->getCache()->get("responsive-image:$imagePath:$alt:{$page->getDestination()}",
             function() use($site, $page, $imagePath, $alt) {
                 $filename = $site->getSourcePath($imagePath); 
 
