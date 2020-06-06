@@ -44,9 +44,11 @@ class ResponsiveImagesPlugin extends Plugin
 
     public function processMarkup(PageOutputGenerated $event)
     {
-        $content = $event->getOutput();
-        $dom = new \DOMDocument();
-        @$dom->loadHTML($content);
+        try {
+            $dom = $event->getDOM();
+        } catch (\TypeError $error) {
+            return;
+        }
         $xpath = new \DOMXPath($dom);
         $imgs = $xpath->query("//img[@fn-responsive]");
 
@@ -57,7 +59,6 @@ class ResponsiveImagesPlugin extends Plugin
         $site = $event->getSite();
         $page = $event->getPage();
         $this->makeImageDirectory($site);
-        $altered = false;
 
         /** @var $img \DOMNode */
         foreach ($imgs as $img) {
@@ -84,10 +85,7 @@ class ResponsiveImagesPlugin extends Plugin
             }
 
             $img->parentNode->replaceChild($pictureElement, $img);
-            $altered = true;
         }
-
-        $event->setOutput($altered ? $dom->saveHTML() : $content);
     }
 
     public function registerParser(PluginsInitialized $event)
