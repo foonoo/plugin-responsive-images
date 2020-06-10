@@ -1,17 +1,17 @@
 <?php
 
-namespace nyansapow\plugins\contrib\responsive_images;
+namespace foonoo\plugins\contrib\responsive_images;
 
 use clearice\io\Io;
 use ntentan\utils\exceptions\FileAlreadyExistsException;
 use ntentan\utils\Filesystem;
-use nyansapow\events\PageOutputGenerated;
-use nyansapow\events\PageWriteStarted;
-use nyansapow\events\PluginsInitialized;
-use nyansapow\events\SiteWriteStarted;
-use nyansapow\events\ThemeLoaded;
-use nyansapow\Plugin;
-use nyansapow\sites\AbstractSite;
+use foonoo\events\PageOutputGenerated;
+use foonoo\events\PageWriteStarted;
+use foonoo\events\PluginsInitialized;
+use foonoo\events\SiteWriteStarted;
+use foonoo\events\ThemeLoaded;
+use foonoo\Plugin;
+use foonoo\sites\AbstractSite;
 
 
 class ResponsiveImagesPlugin extends Plugin
