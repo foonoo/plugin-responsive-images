@@ -5,8 +5,8 @@ namespace foonoo\plugins\contrib\responsive_images;
 use clearice\io\Io;
 use ntentan\utils\exceptions\FileAlreadyExistsException;
 use ntentan\utils\Filesystem;
-use foonoo\events\PageOutputGenerated;
-use foonoo\events\PageWriteStarted;
+use foonoo\events\ContentOutputGenerated;
+use foonoo\events\ContentWriteStarted;
 use foonoo\events\PluginsInitialized;
 use foonoo\events\SiteWriteStarted;
 use foonoo\events\ThemeLoaded;
@@ -25,9 +25,9 @@ class ResponsiveImagesPlugin extends Plugin
         return [
             PluginsInitialized::class => [$this, 'registerParser'],
             ThemeLoaded::class => [$this, 'registerTemplates'],
-            PageOutputGenerated::class => [$this, 'processMarkup'],
+            ContentOutputGenerated::class => [$this, 'processMarkup'],
             SiteWriteStarted::class => [$this, 'setActiveSite'],
-            PageWriteStarted::class => [$this, 'setActivePage']
+            ContentWriteStarted::class => [$this, 'setActivePage']
         ];
     }
 
@@ -37,12 +37,12 @@ class ResponsiveImagesPlugin extends Plugin
         $this->makeImageDirectory($this->site);
     }
 
-    public function setActivePage(PageWriteStarted $event)
+    public function setActivePage(ContentWriteStarted $event)
     {
         $this->page = $event->getContent();
     }
 
-    public function processMarkup(PageOutputGenerated $event)
+    public function processMarkup(ContentOutputGenerated $event)
     {
         try {
             $dom = $event->getDOM();
