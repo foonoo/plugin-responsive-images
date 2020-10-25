@@ -11,7 +11,7 @@
         <source srcset="<?= $site_path . $source['webp_srcset'][0][0] ?> <?= array_reduce(array_slice($source['webp_srcset']->unescape(), 1), $reducer, "") ?>" type="image/webp" <?= $media ?> >
         <source srcset="<?= $site_path . $source['jpeg_srcset'][0][0] ?> <?= array_reduce(array_slice($source['jpeg_srcset']->unescape(), 1), $reducer, "") ?>" type="image/jpeg" <?= $media ?> >
         <?php endforeach; ?>
-        <img src="<?= $site_path . $image_path ?>" alt="<?= $alt ?>" />
+        <img width="<?= $width ?>" height="<?= $height ?>" src="<?= $site_path . $image_path ?>" alt="<?= $alt ?>" loading="lazy" />
     </picture>
     <figcaption><?= $alt ?></figcaption>
 </figure>
