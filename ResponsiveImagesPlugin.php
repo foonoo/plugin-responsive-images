@@ -154,9 +154,10 @@ class ResponsiveImagesPlugin extends Plugin
     private function generateResponsiveImageMarkup($page, $imagePath, $attributes)
     {
         $site = $this->site;
-        $alt = $attributes['__default'] ?? $attributes['alt'] ?? "";
-        return $site->getCache()->get("responsive-image:$imagePath:$alt:{$page->getDestination()}",
-            function () use ($site, $page, $imagePath, $alt) {
+        $jsonAttributes = \json_encode($attributes);
+        return $site->getCache()->get("responsive-image:$imagePath:$jsonAttributes:{$page->getDestination()}",
+            function () use ($site, $page, $imagePath, $attributes) {
+                $alt = $attributes['__default'] ?? $attributes['alt'] ?? "";
                 $filename = $site->getSourcePath($imagePath);
 
                 if (!\file_exists($filename)) {
@@ -179,7 +180,11 @@ class ResponsiveImagesPlugin extends Plugin
                     'image_path' => $defaultImage, 'alt' => $alt,
                     'site_path' => $templateVariables['site_path'],
                     'width' => $image->getImageWidth(),
-                    'height' => $image->getImageHeight()
+                    'height' => $image->getImageHeight(),
+                    'attrs' => [
+                        'loading' => $attributes['loading'] ?? 'lazy',
+                        'frame' => $attributes['frame'] ?? ''
+                    ]
                 ];
 
                 return $this->templateEngine->render('responsive_images', $args);
