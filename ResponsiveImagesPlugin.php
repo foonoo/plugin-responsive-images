@@ -117,13 +117,13 @@ class ResponsiveImagesPlugin extends Plugin
 
         $width = $image->getImageWidth();
         $aspect = $width / $image->getImageHeight();
-        $min = $this->getOption('min_width', 300);
+        $min = $this->getOption('min_width', 320);
         $max = $this->getOption('max_width', $width);
-        $step = ($max - $min) / $this->getOption('num_steps', 5);
+        $step = ($max - $min) / $this->getOption('num_steps', 7);
         $halfStep = $step / 2;
         $lenSourcePath = strlen($site->getSourcePath(""));
 
-        for ($i = $max; $i >= $min; $i -= $step) {
+        for ($i = $min; $i < $max || abs($i - $max) < 0.0001; $i += $step) {
             $size = round($i);
             $jpegs = [];
             $webps = [];
@@ -135,7 +135,7 @@ class ResponsiveImagesPlugin extends Plugin
                 $jpegs[] = [substr($this->writeImage($site, $image, $size * 2, 'jpeg', $aspect), $lenSourcePath), 2];
                 $webps[] = [substr($this->writeImage($site, $image, $size * 2, 'webp', $aspect), $lenSourcePath), 2];
             }
-            $sizes[] = ['jpeg_srcset' => $jpegs, 'webp_srcset' => $webps, 'min_width' => $size - $halfStep];
+            $sizes[] = ['jpeg_srcset' => $jpegs, 'webp_srcset' => $webps, 'max_width' => $size];
         }
 
         return [$sizes, $jpeg];

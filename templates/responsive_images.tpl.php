@@ -5,7 +5,7 @@
         <?php foreach($sources as $i => $source): ?>
         <?php
         if($i < count($sources) - 1)
-            $media = "media=\"(min-width:{$source['min_width']}px)\"";
+            $media = "media=\"(max-width:{$source['max_width']}px)\"";
         else
             $media = "";
         ?>
