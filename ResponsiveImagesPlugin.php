@@ -3,6 +3,7 @@
 namespace foonoo\plugins\contrib\responsive_images;
 
 use clearice\io\Io;
+use foonoo\content\Content;
 use ntentan\utils\exceptions\FileAlreadyExistsException;
 use ntentan\utils\Filesystem;
 use foonoo\events\ContentOutputGenerated;
@@ -16,42 +17,61 @@ use foonoo\sites\AbstractSite;
 
 /**
  * Generates responsive image sizes.
+ *
  */
 class ResponsiveImagesPlugin extends Plugin
 {
     private $templateEngine;
+
+    /**
+     * @var AbstractSite
+     */
     private $site;
-    private $page;
+
+    /**
+     * @var Content
+     */
+    private $content;
 
     public function getEvents()
     {
         return [
-            PluginsInitialized::class => [$this, 'registerParser'],
-            ThemeLoaded::class => [$this, 'registerTemplates'],
-            ContentOutputGenerated::class => [$this, 'processMarkup'],
-            SiteWriteStarted::class => [$this, 'setActiveSite'],
-            ContentWriteStarted::class => [$this, 'setActivePage']
+            PluginsInitialized::class => function(PluginsInitialized $event) {$this->registerParserTags($event);},
+            ThemeLoaded::class => function(ThemeLoaded $event) {$this->registerTemplates($event);},
+            ContentOutputGenerated::class => function(ContentOutputGenerated $event) {$this->processMarkup($event);},
+            SiteWriteStarted::class => function(SiteWriteStarted $event) {$this->setActiveSite($event);},
+            ContentWriteStarted::class => function(ContentWriteStarted $event) {$this->setActiveContent($event);}
         ];
     }
 
-    public function setActiveSite(SiteWriteStarted $event)
+    /**
+     * This event handler helps the plugin keep track of the current site being processed.
+     *
+     * @param SiteWriteStarted $event
+     */
+    private function setActiveSite(SiteWriteStarted $event)
     {
         $this->site = $event->getSite();
         $this->makeImageDirectory($this->site);
     }
 
-    public function setActivePage(ContentWriteStarted $event)
+    /**
+     * This event handler helps the plugin keep track of the current page being processed.
+     *
+     * @param ContentWriteStarted $event
+     */
+    private function setActiveContent(ContentWriteStarted $event)
     {
         $this->page = $event->getContent();
     }
 
     /**
-     * Whenever content is generated, this event handler goes through the generated DOM tree and makes any images that
-     * have an fn-responsive attribute responsive.
+     * Whenever content is generated, this event handler goes through the generated DOM tree and makes any image tags
+     * that have an fn-responsive attribute responsive.
      *
      * @param ContentOutputGenerated $event
      */
-    public function processMarkup(ContentOutputGenerated $event)
+    private function processMarkup(ContentOutputGenerated $event)
     {
         try {
             $dom = $event->getDOM();
@@ -97,28 +117,36 @@ class ResponsiveImagesPlugin extends Plugin
         }
     }
 
-    public function registerParser(PluginsInitialized $event)
+    /**
+     * Registers the image markup with nyansapow's built in parser.
+     *
+     * @param PluginsInitialized $event
+     */
+    private function registerParserTags(PluginsInitialized $event)
     {
-        $event->getTagParser()->registerTag(
-            "/(?<image>.*\.(jpeg|jpg|png|gif|webp))/",
-            0, [$this, 'getMarkupGenerator']
-        );
+        $event->getTagParser()->registerTag("/(?<image>.*\.(jpeg|jpg|png|gif|webp))/",10, [$this, 'getMarkupGenerator'], 'responsive image');
     }
 
-    public function registerTemplates(ThemeLoaded $event)
+    /**
+     * Registers the templates used for rendering images.
+     *
+     * @param ThemeLoaded $event
+     */
+    private function registerTemplates(ThemeLoaded $event)
     {
         $this->templateEngine = $event->getTemplateEngine();
         $this->templateEngine->prependPath(__DIR__ . "/templates");
     }
 
-    private function generateLinearSteppedImages($site, $image)
+    private function generateLinearSteppedImages($site, $image, $attributes)
     {
         $sizes = [];
+        $jpeg = null;
 
         $width = $image->getImageWidth();
         $aspect = $width / $image->getImageHeight();
-        $min = $this->getOption('min_width', 320);
-        $max = $this->getOption('max_width', $width);
+        $min = $this->getOption('min_width', 200);
+        $max = $attributes['max-width'] ?? $this->getOption('max_width', $width);
         $step = ($max - $min) / $this->getOption('num_steps', 7);
         $halfStep = $step / 2;
         $lenSourcePath = strlen($site->getSourcePath(""));
@@ -131,7 +159,7 @@ class ResponsiveImagesPlugin extends Plugin
             $jpegs[] = [$jpeg];
             $webps[] = [substr($this->writeImage($site, $image, $size, 'webp', $aspect), $lenSourcePath)];
 
-            if ($this->getOption('hidpi', false) && $size * 2 < $max) {
+            if ($this->getOption('hidpi', false) && $size * 2 < $width) {
                 $jpegs[] = [substr($this->writeImage($site, $image, $size * 2, 'jpeg', $aspect), $lenSourcePath), 2];
                 $webps[] = [substr($this->writeImage($site, $image, $size * 2, 'webp', $aspect), $lenSourcePath), 2];
             }
@@ -151,9 +179,22 @@ class ResponsiveImagesPlugin extends Plugin
         }
     }
 
-    private function generateResponsiveImageMarkup($page, $imagePath, $attributes)
+    /**
+     * Generates and the HTML markup for a single responsive image instance.
+     * This function generates markups through the plugins templates, which can be overidden by the end user, and caches
+     * them to improve performance.
+     *
+     * @param $page
+     * @param $imagePath
+     * @param $attributes
+     * @return string
+     * @throws \ImagickException
+     */
+    private function generateResponsiveImageMarkup(Content $page, string $imagePath, array $attributes) : string
     {
         $site = $this->site;
+        // serialized json attributes are added to the cache key to force cache invalidations
+        // when image attributes change
         $jsonAttributes = \json_encode($attributes);
         return $site->getCache()->get("responsive-image:$imagePath:$jsonAttributes:{$page->getDestination()}",
             function () use ($site, $page, $imagePath, $attributes) {
@@ -168,7 +209,7 @@ class ResponsiveImagesPlugin extends Plugin
                 $image = new \Imagick($filename);
                 $this->stdOut("Generating responsive images for {$filename}\n", Io::OUTPUT_LEVEL_1);
                 $templateVariables = $site->getTemplateData($page->getFullDestination());
-                list($sources, $defaultImage) = $this->generateLinearSteppedImages($site, $image);
+                list($sources, $defaultImage) = $this->generateLinearSteppedImages($site, $image, $attributes);
 
                 $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
                 if ($extension == 'jpeg' || $extension == 'jpg') {
@@ -210,7 +251,7 @@ class ResponsiveImagesPlugin extends Plugin
      * @param $aspect
      * @return string
      */
-    private function writeImage($site, $image, $width, $format, $aspect)
+    private function writeImage($site, $image, $width, $format, $aspect) : string
     {
         $filename = substr($image->getImageFilename(), strlen($site->getSourcePath("np_images")) + 1);
         $filename = $site->getSourcePath(
