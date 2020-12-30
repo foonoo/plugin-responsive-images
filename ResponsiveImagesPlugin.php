@@ -36,11 +36,21 @@ class ResponsiveImagesPlugin extends Plugin
     public function getEvents()
     {
         return [
-            PluginsInitialized::class => function(PluginsInitialized $event) {$this->registerParserTags($event);},
-            ThemeLoaded::class => function(ThemeLoaded $event) {$this->registerTemplates($event);},
-            ContentOutputGenerated::class => function(ContentOutputGenerated $event) {$this->processMarkup($event);},
-            SiteWriteStarted::class => function(SiteWriteStarted $event) {$this->setActiveSite($event);},
-            ContentWriteStarted::class => function(ContentWriteStarted $event) {$this->setActiveContent($event);}
+            PluginsInitialized::class => function (PluginsInitialized $event) {
+                $this->registerParserTags($event);
+            },
+            ThemeLoaded::class => function (ThemeLoaded $event) {
+                $this->registerTemplates($event);
+            },
+            ContentOutputGenerated::class => function (ContentOutputGenerated $event) {
+                $this->processMarkup($event);
+            },
+            SiteWriteStarted::class => function (SiteWriteStarted $event) {
+                $this->setActiveSite($event);
+            },
+            ContentWriteStarted::class => function (ContentWriteStarted $event) {
+                $this->setActiveContent($event);
+            }
         ];
     }
 
@@ -101,7 +111,7 @@ class ResponsiveImagesPlugin extends Plugin
             }
 
             $src = substr($src->nodeValue, strlen($sitePath));
-            $markup = $this->generateResponsiveImageMarkup($page, $src, ['alt' => $alt ? $alt->nodeValue : ""]);
+            $markup = $this->generateResponsiveImageMarkup($page, $src, $this->collateAttributes(['alt' => $alt ? $alt->nodeValue : ""]));
             $newDom = new \DOMDocument();
             @$newDom->loadHTML($markup);
             $pictureElement = $newDom->getElementsByTagName('picture');
@@ -118,17 +128,40 @@ class ResponsiveImagesPlugin extends Plugin
     }
 
     /**
-     * Registers the image markup with nyansapow's built in parser.
+     * Collate attributes so those from tags, classes, and plugin options are combined in the right order.
+     * Attribute combination follows this hierarchy: tag supercedes class, which further supercedes plugin. The method
+     * that consumes the plugin is left to specify the default.
+     *
+     * @param $attributes array
+     */
+    private function collateAttributes(array $attributes): array
+    {
+        $tags = ['min-width', 'max-width', 'num-steps', 'frame'];
+        foreach ($tags as $tag) {
+            if ($this->getOption($tag) !== null) {
+                $attributes[$tag] = $attributes[$tag] ?? $this->getOption($tag);
+            }
+        }
+        return $attributes;
+    }
+
+    /**
+     * Registers the image markup with foonoo's built in parser.
      *
      * @param PluginsInitialized $event
      */
     private function registerParserTags(PluginsInitialized $event)
     {
-        $event->getTagParser()->registerTag("/(?<image>.*\.(jpeg|jpg|png|gif|webp))/",10, [$this, 'getMarkupGenerator'], 'responsive image');
+        $event->getTagParser()->registerTag("/(?<image>.*\.(jpeg|jpg|png|gif|webp))/", 10,
+            function ($matches, $text, $attributes) {
+                $this->getMarkupGenerator($matches, $text, $attributes);
+            },
+            'responsive image'
+        );
     }
 
     /**
-     * Registers the templates used for rendering images.
+     * Registers the HTML templates used for rendering images into pages.
      *
      * @param ThemeLoaded $event
      */
@@ -138,17 +171,26 @@ class ResponsiveImagesPlugin extends Plugin
         $this->templateEngine->prependPath(__DIR__ . "/templates");
     }
 
-    private function generateLinearSteppedImages($site, $image, $attributes)
+    /**
+     * Generate a list of image breakpoints with linearly increasing widths.
+     * The linear factor for increasing the widths is computed by dividing the difference between the minimum width and
+     * maximum width by the number of required steps.
+     *
+     * @param $site AbstractSite The current site
+     * @param $image \Imagick An instance of the image.
+     * @param $attributes array An array with image attributes.
+     * @return array
+     */
+    private function generateLinearSteppedImages(AbstractSite $site, \Imagick $image, array $attributes)
     {
         $sizes = [];
         $jpeg = null;
 
         $width = $image->getImageWidth();
         $aspect = $width / $image->getImageHeight();
-        $min = $this->getOption('min_width', 200);
-        $max = $attributes['max-width'] ?? $this->getOption('max_width', $width);
-        $step = ($max - $min) / $this->getOption('num_steps', 7);
-        $halfStep = $step / 2;
+        $min = $this->getOption('min-width', 200);
+        $max = $attributes['max-width'] ?? $this->getOption('max-width', $width);
+        $step = ($max - $min) / $this->getOption('num-steps', 7);
         $lenSourcePath = strlen($site->getSourcePath(""));
 
         for ($i = $min; $i < $max || abs($i - $max) < 0.0001; $i += $step) {
@@ -190,7 +232,7 @@ class ResponsiveImagesPlugin extends Plugin
      * @return string
      * @throws \ImagickException
      */
-    private function generateResponsiveImageMarkup(Content $page, string $imagePath, array $attributes) : string
+    private function generateResponsiveImageMarkup(Content $page, string $imagePath, array $attributes): string
     {
         $site = $this->site;
         // serialized json attributes are added to the cache key to force cache invalidations
@@ -238,9 +280,9 @@ class ResponsiveImagesPlugin extends Plugin
      * @param $matches
      * @return string
      */
-    public function getMarkupGenerator($matches, $text, $attributes)
+    private function getMarkupGenerator($matches, $text, $attributes)
     {
-        return $this->generateResponsiveImageMarkup($this->page, "np_images/{$matches['image']}", $attributes);
+        return $this->generateResponsiveImageMarkup($this->page, "np_images/{$matches['image']}", $this->collateAttributes($attributes));
     }
 
     /**
@@ -251,7 +293,7 @@ class ResponsiveImagesPlugin extends Plugin
      * @param $aspect
      * @return string
      */
-    private function writeImage($site, $image, $width, $format, $aspect) : string
+    private function writeImage($site, $image, $width, $format, $aspect): string
     {
         $filename = substr($image->getImageFilename(), strlen($site->getSourcePath("np_images")) + 1);
         $filename = $site->getSourcePath(
