@@ -28,6 +28,8 @@ class ResponsiveImagesPlugin extends Plugin
      */
     private $site;
 
+
+
     /**
      * @var Content
      */
@@ -36,21 +38,11 @@ class ResponsiveImagesPlugin extends Plugin
     public function getEvents()
     {
         return [
-            PluginsInitialized::class => function (PluginsInitialized $event) {
-                $this->registerParserTags($event);
-            },
-            ThemeLoaded::class => function (ThemeLoaded $event) {
-                $this->registerTemplates($event);
-            },
-            ContentOutputGenerated::class => function (ContentOutputGenerated $event) {
-                $this->processMarkup($event);
-            },
-            SiteWriteStarted::class => function (SiteWriteStarted $event) {
-                $this->setActiveSite($event);
-            },
-            ContentWriteStarted::class => function (ContentWriteStarted $event) {
-                $this->setActiveContent($event);
-            }
+            PluginsInitialized::class => function (PluginsInitialized $event) { $this->registerParserTags($event); },
+            ThemeLoaded::class => function (ThemeLoaded $event) { $this->registerTemplates($event); },
+            ContentOutputGenerated::class => function (ContentOutputGenerated $event) { $this->processMarkup($event); },
+            SiteWriteStarted::class => function (SiteWriteStarted $event) { $this->setActiveSite($event); },
+            ContentWriteStarted::class => function (ContentWriteStarted $event) { $this->setActiveContent($event); }
         ];
     }
 
@@ -133,13 +125,27 @@ class ResponsiveImagesPlugin extends Plugin
      * that consumes the plugin is left to specify the default.
      *
      * @param $attributes array
+     * @return array
      */
     private function collateAttributes(array $attributes): array
     {
         $tags = ['min-width', 'max-width', 'num-steps', 'frame'];
+        $classes = $this->getOption('classes');
+        $classAttributes = [];
+
+        if($classes != null && isset($attributes['class']) && isset($classes[$attributes['class']])) {
+            $classAttributes = $classes[$attributes['class']];
+        } else if ($classes != null && isset($attributes['class'])) {
+            $this->stdOut("Class [{$attributes['class']}] is not configured.");
+        }
+
         foreach ($tags as $tag) {
-            if ($this->getOption($tag) !== null) {
-                $attributes[$tag] = $attributes[$tag] ?? $this->getOption($tag);
+            if(isset($attributes[$tag])) {
+                continue;
+            } else if (isset($classAttributes[$tag])) {
+                $attributes[$tag] = $classAttributes[$tag];
+            } else if ($this->getOption($tag) !== null) {
+                $attributes[$tag] = $this->getOption($tag);
             }
         }
         return $attributes;
@@ -154,7 +160,7 @@ class ResponsiveImagesPlugin extends Plugin
     {
         $event->getTagParser()->registerTag("/(?<image>.*\.(jpeg|jpg|png|gif|webp))/", 10,
             function ($matches, $text, $attributes) {
-                $this->getMarkupGenerator($matches, $text, $attributes);
+                return $this->getMarkupGenerator($matches, $text, $attributes);
             },
             'responsive image'
         );
