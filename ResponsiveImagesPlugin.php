@@ -28,8 +28,6 @@ class ResponsiveImagesPlugin extends Plugin
      */
     private $site;
 
-
-
     /**
      * @var Content
      */
@@ -67,6 +65,23 @@ class ResponsiveImagesPlugin extends Plugin
         $this->page = $event->getContent();
     }
 
+    private function extractDomAttributes(\DOMNamedNodeMap $domAttributes) : array
+    {
+        $attributes = [];
+
+        /**
+         * @var string $name
+         * @var \DOMAttr $value
+         */
+        foreach($domAttributes as $name => $value) {
+            if(preg_match("/fn-responsive-(?<attribute>.*)/", $name, $matches)) {
+                $attributes[$matches['attribute']] = $value->textContent;
+            }
+        }
+
+        return $attributes;
+    }
+
     /**
      * Whenever content is generated, this event handler goes through the generated DOM tree and makes any image tags
      * that have an fn-responsive attribute responsive.
@@ -96,6 +111,8 @@ class ResponsiveImagesPlugin extends Plugin
             $sitePath = $site->getTemplateData($site->getDestinationPath($page->getDestination()))['site_path'];
             $src = $img->attributes->getNamedItem("src");
             $alt = $img->attributes->getNamedItem("alt");
+            $attributes = $this->extractDomAttributes($img->attributes);
+            $attributes['alt'] = $attributes['alt'] ?? $alt ? $alt->nodeValue : "";
 
             if (!$src) {
                 $this->errOut("src attribute of <img> tag cannot be empty on page targeted for \"{$page->getDestination()}\"\n", Io::OUTPUT_LEVEL_1);
@@ -103,7 +120,7 @@ class ResponsiveImagesPlugin extends Plugin
             }
 
             $src = substr($src->nodeValue, strlen($sitePath));
-            $markup = $this->generateResponsiveImageMarkup($page, $src, $this->collateAttributes(['alt' => $alt ? $alt->nodeValue : ""]));
+            $markup = $this->generateResponsiveImageMarkup($page, $src, $this->collateAttributes($attributes));
             $newDom = new \DOMDocument();
             @$newDom->loadHTML($markup);
             $pictureElement = $newDom->getElementsByTagName('picture');
@@ -285,6 +302,7 @@ class ResponsiveImagesPlugin extends Plugin
     /**
      * @param $matches
      * @return string
+     * @throws \ImagickException
      */
     private function getMarkupGenerator($matches, $text, $attributes)
     {
