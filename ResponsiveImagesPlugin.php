@@ -7,7 +7,7 @@ use foonoo\content\Content;
 use ntentan\utils\exceptions\FileAlreadyExistsException;
 use ntentan\utils\Filesystem;
 use foonoo\events\ContentOutputGenerated;
-use foonoo\events\ContentWriteStarted;
+use foonoo\events\ContentGenerationStarted;
 use foonoo\events\PluginsInitialized;
 use foonoo\events\SiteWriteStarted;
 use foonoo\events\ThemeLoaded;
@@ -40,13 +40,13 @@ class ResponsiveImagesPlugin extends Plugin
             ThemeLoaded::class => function (ThemeLoaded $event) { $this->registerTemplates($event); },
             ContentOutputGenerated::class => function (ContentOutputGenerated $event) { $this->processMarkup($event); },
             SiteWriteStarted::class => function (SiteWriteStarted $event) { $this->setActiveSite($event); },
-            ContentWriteStarted::class => function (ContentWriteStarted $event) { $this->setActiveContent($event); }
+            ContentGenerationStarted::class => function (ContentGenerationStarted $event) { $this->setActiveContent($event); }
         ];
     }
 
-    /**
-     * This event handler helps the plugin keep track of the current site being processed.
+    /**.
      *
+     * This event handler helps the plugin keep track of the current site being processed
      * @param SiteWriteStarted $event
      */
     private function setActiveSite(SiteWriteStarted $event)
@@ -58,11 +58,11 @@ class ResponsiveImagesPlugin extends Plugin
     /**
      * This event handler helps the plugin keep track of the current page being processed.
      *
-     * @param ContentWriteStarted $event
+     * @param ContentGenerationStarted $event
      */
-    private function setActiveContent(ContentWriteStarted $event)
+    private function setActiveContent(ContentGenerationStarted $event)
     {
-        $this->page = $event->getContent();
+        $this->content = $event->getContent();
     }
 
     private function extractDomAttributes(\DOMNamedNodeMap $domAttributes) : array
@@ -103,7 +103,7 @@ class ResponsiveImagesPlugin extends Plugin
         }
 
         $site = $event->getSite();
-        $page = $event->getPage();
+        $page = $event->getContent();
         $this->makeImageDirectory($site);
 
         /** @var $img \DOMNode */
@@ -249,20 +249,20 @@ class ResponsiveImagesPlugin extends Plugin
      * This function generates markups through the plugins templates, which can be overidden by the end user, and caches
      * them to improve performance.
      *
-     * @param $page
+     * @param $content
      * @param $imagePath
      * @param $attributes
      * @return string
      * @throws \ImagickException
      */
-    private function generateResponsiveImageMarkup(Content $page, string $imagePath, array $attributes): string
+    private function generateResponsiveImageMarkup(Content $content, string $imagePath, array $attributes): string
     {
         $site = $this->site;
         // serialized json attributes are added to the cache key to force cache invalidations
         // when image attributes change
         $jsonAttributes = \json_encode($attributes);
-        return $site->getCache()->get("responsive-image:$imagePath:$jsonAttributes:{$page->getDestination()}",
-            function () use ($site, $page, $imagePath, $attributes) {
+        return $site->getCache()->get("responsive-image:$imagePath:$jsonAttributes:{$content->getDestination()}",
+            function () use ($site, $content, $imagePath, $attributes) {
                 $alt = $attributes['__default'] ?? $attributes['alt'] ?? "";
                 $filename = $site->getSourcePath($imagePath);
 
@@ -273,7 +273,7 @@ class ResponsiveImagesPlugin extends Plugin
 
                 $image = new \Imagick($filename);
                 $this->stdOut("Generating responsive images for {$filename}\n", Io::OUTPUT_LEVEL_1);
-                $templateVariables = $site->getTemplateData($page->getFullDestination());
+                $templateVariables = $site->getTemplateData($content->getFullDestination());
                 list($sources, $defaultImage) = $this->generateLinearSteppedImages($site, $image, $attributes);
 
                 $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
@@ -306,7 +306,7 @@ class ResponsiveImagesPlugin extends Plugin
      */
     private function getMarkupGenerator($matches, $text, $attributes)
     {
-        return $this->generateResponsiveImageMarkup($this->page, "np_images/{$matches['image']}", $this->collateAttributes($attributes));
+        return $this->generateResponsiveImageMarkup($this->content, "np_images/{$matches['image']}", $this->collateAttributes($attributes));
     }
 
     /**
