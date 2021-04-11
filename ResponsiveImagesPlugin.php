@@ -67,26 +67,32 @@ class ResponsiveImagesPlugin extends Plugin
 
     private function extractDomAttributes(\DOMNamedNodeMap $domAttributes) : array
     {
-        $attributes = [];
+        $fnResponsiveAttributes = [];
+        $otherAttributes = [];
 
         /**
          * @var string $name
          * @var \DOMAttr $value
          */
         foreach($domAttributes as $name => $value) {
-            if(preg_match("/fn-responsive-(?<attribute>.*)/", $name, $matches)) {
-                $attributes[$matches['attribute']] = $value->textContent;
+            if(preg_match("/fn-responsive(-)?(?<attribute>.*)?/", $name, $matches)) {
+                if($matches['attribute']) {
+                    $fnResponsiveAttributes[$matches['attribute']] = $value->textContent;
+                }
+            } else {
+                $otherAttributes[$name] = $value->textContent;
             }
         }
 
-        return $attributes;
+        return [$fnResponsiveAttributes, $otherAttributes];
     }
 
     /**
-     * Whenever content is generated, this event handler goes through the generated DOM tree and makes any image tags
-     * that have an fn-responsive attribute responsive.
+     * Whenever content is generated, this event handler goes through the generated DOM tree and converts any image tags
+     * that have an fn-responsive attribute.
      *
      * @param ContentOutputGenerated $event
+     * @throws \ImagickException
      */
     private function processMarkup(ContentOutputGenerated $event)
     {
@@ -109,18 +115,17 @@ class ResponsiveImagesPlugin extends Plugin
         /** @var $img \DOMNode */
         foreach ($imgs as $img) {
             $sitePath = $site->getTemplateData($site->getDestinationPath($page->getDestination()))['site_path'];
-            $src = $img->attributes->getNamedItem("src");
-            $alt = $img->attributes->getNamedItem("alt");
-            $attributes = $this->extractDomAttributes($img->attributes);
-            $attributes['alt'] = $attributes['alt'] ?? $alt ? $alt->nodeValue : "";
+            list($properties, $nodeAttributes) = $this->extractDomAttributes($img->attributes);
+            $properties['attributes'] = $nodeAttributes;
+            $src = $nodeAttributes['src'];
 
             if (!$src) {
                 $this->errOut("src attribute of <img> tag cannot be empty on page targeted for \"{$page->getDestination()}\"\n", Io::OUTPUT_LEVEL_1);
                 continue;
             }
 
-            $src = substr($src->nodeValue, strlen($sitePath));
-            $markup = $this->generateResponsiveImageMarkup($page, $src, $this->collateAttributes($attributes));
+            $src = substr($src, strlen($sitePath));
+            $markup = $this->generateResponsiveImageMarkup($page, $src, $this->collateAttributes($properties));
             $newDom = new \DOMDocument();
             @$newDom->loadHTML($markup);
             $pictureElement = $newDom->getElementsByTagName('picture');
@@ -203,6 +208,7 @@ class ResponsiveImagesPlugin extends Plugin
      * @param $image \Imagick An instance of the image.
      * @param $attributes array An array with image attributes.
      * @return array
+     * @throws \ImagickException
      */
     private function generateLinearSteppedImages(AbstractSite $site, \Imagick $image, array $attributes)
     {
