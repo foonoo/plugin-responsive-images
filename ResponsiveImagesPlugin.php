@@ -17,7 +17,6 @@ use foonoo\sites\AbstractSite;
 
 /**
  * Generates responsive image sizes.
- *
  */
 class ResponsiveImagesPlugin extends Plugin
 {
@@ -56,7 +55,8 @@ class ResponsiveImagesPlugin extends Plugin
     }
 
     /**
-     * This event handler helps the plugin keep track of the current page being processed.
+     * This event handler helps the plugin keep track of the current current being processed.
+     * This is necessary for the cases where responsive images are being generated from tags.
      *
      * @param ContentGenerationStarted $event
      */
@@ -115,8 +115,8 @@ class ResponsiveImagesPlugin extends Plugin
         /** @var $img \DOMNode */
         foreach ($imgs as $img) {
             $sitePath = $site->getTemplateData($site->getDestinationPath($page->getDestination()))['site_path'];
-            list($properties, $nodeAttributes) = $this->extractDomAttributes($img->attributes);
-            $properties['attributes'] = $nodeAttributes;
+            list($attributes, $nodeAttributes) = $this->extractDomAttributes($img->attributes);
+            $attributes['attributes'] = $nodeAttributes;
             $src = $nodeAttributes['src'];
 
             if (!$src) {
@@ -125,7 +125,7 @@ class ResponsiveImagesPlugin extends Plugin
             }
 
             $src = substr($src, strlen($sitePath));
-            $markup = $this->generateResponsiveImageMarkup($page, $src, $this->collateAttributes($properties));
+            $markup = $this->generateResponsiveImageMarkup($page, $src, $this->collateAttributes($attributes));
             $newDom = new \DOMDocument();
             @$newDom->loadHTML($markup);
             $pictureElement = $newDom->getElementsByTagName('picture');
@@ -151,14 +151,18 @@ class ResponsiveImagesPlugin extends Plugin
      */
     private function collateAttributes(array $attributes): array
     {
-        $tags = ['min-width', 'max-width', 'num-steps', 'frame'];
+        // Setup some defaults
+        $attributes['loading'] = $attributes['loading'] ?? 'lazy';
+
+        // Merge on these specific tags
+        $tags = ['min-width', 'max-width', 'num-steps', 'frame', 'loading'];
         $classes = $this->getOption('classes');
         $classAttributes = [];
 
         if($classes != null && isset($attributes['class']) && isset($classes[$attributes['class']])) {
             $classAttributes = $classes[$attributes['class']];
         } else if ($classes != null && isset($attributes['class'])) {
-            $this->stdOut("Class [{$attributes['class']}] is not configured.");
+            $this->errOut("Class [{$attributes['class']}] is not configured.");
         }
 
         foreach ($tags as $tag) {
@@ -255,9 +259,9 @@ class ResponsiveImagesPlugin extends Plugin
      * This function generates markups through the plugins templates, which can be overidden by the end user, and caches
      * them to improve performance.
      *
-     * @param $content
-     * @param $imagePath
-     * @param $attributes
+     * @param Content $content
+     * @param string $imagePath
+     * @param array $attributes
      * @return string
      * @throws \ImagickException
      */
@@ -269,7 +273,6 @@ class ResponsiveImagesPlugin extends Plugin
         $jsonAttributes = \json_encode($attributes);
         return $site->getCache()->get("responsive-image:$imagePath:$jsonAttributes:{$content->getDestination()}",
             function () use ($site, $content, $imagePath, $attributes) {
-                $alt = $attributes['__default'] ?? $attributes['alt'] ?? "";
                 $filename = $site->getSourcePath($imagePath);
 
                 if (!\file_exists($filename)) {
@@ -289,14 +292,11 @@ class ResponsiveImagesPlugin extends Plugin
 
                 $args = [
                     'sources' => $sources,
-                    'image_path' => $defaultImage, 'alt' => $alt,
+                    'image_path' => $defaultImage, 'alt' => $attributes['attributes']['alt'] ?? "",
                     'site_path' => $templateVariables['site_path'],
                     'width' => $image->getImageWidth(),
                     'height' => $image->getImageHeight(),
-                    'attrs' => [
-                        'loading' => $attributes['loading'] ?? 'lazy',
-                        'frame' => $attributes['frame'] ?? ''
-                    ]
+                    'attrs' => $attributes
                 ];
 
                 return $this->templateEngine->render('responsive_images', $args);
@@ -312,6 +312,7 @@ class ResponsiveImagesPlugin extends Plugin
      */
     private function getMarkupGenerator($matches, $text, $attributes)
     {
+        $attributes['attributes'] = ['alt' => $attributes['__default']];
         return $this->generateResponsiveImageMarkup($this->content, "np_images/{$matches['image']}", $this->collateAttributes($attributes));
     }
 
@@ -336,7 +337,7 @@ class ResponsiveImagesPlugin extends Plugin
         $image = $image->clone();
         $width = round($width);
         $image->scaleImage($width, $width / $aspect);
-        $image->setImageCompressionQuality($this->getOption("compression_quality", 75));
+        $image->setImageCompressionQuality($this->getOption("compression_quality", 60));
         $this->stdOut("Writing image $filename\n");
         $image->writeImage($filename);
 
