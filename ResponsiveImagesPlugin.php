@@ -125,7 +125,7 @@ class ResponsiveImagesPlugin extends Plugin
             }
 
             $src = substr($src, strlen($sitePath));
-            $markup = $this->generateResponsiveImageMarkup($page, $src, $this->collateAttributes($attributes));
+            $markup = $this->generateResponsiveImageMarkup($page, "_foonoo/$src", $this->collateAttributes($attributes));
             $newDom = new \DOMDocument();
             @$newDom->loadHTML($markup);
             $pictureElement = $newDom->getElementsByTagName('picture');
@@ -224,7 +224,7 @@ class ResponsiveImagesPlugin extends Plugin
         $min = $this->getOption('min-width', 200);
         $max = $attributes['max-width'] ?? $this->getOption('max-width', $width);
         $step = ($max - $min) / $this->getOption('num-steps', 7);
-        $lenSourcePath = strlen($site->getSourcePath(""));
+        $lenSourcePath = strlen($site->getSourcePath("_foonoo"));
 
         for ($i = $min; $i < $max || abs($i - $max) < 0.0001; $i += $step) {
             $size = round($i);
@@ -246,9 +246,9 @@ class ResponsiveImagesPlugin extends Plugin
 
     private function makeImageDirectory(AbstractSite $site): void
     {
-        $outputDir = Filesystem::directory($site->getSourcePath($this->getOption('image_path', 'np_images/responsive_images/')));
+        $outputDir = Filesystem::directory($site->getSourcePath($this->getOption('image_path', '_foonoo/images/responsive_images/')));
         try {
-            $outputDir->create();
+            $outputDir->create(true);
         } catch (FileAlreadyExistsException $e) {
 
         }
@@ -313,7 +313,7 @@ class ResponsiveImagesPlugin extends Plugin
     private function getMarkupGenerator($matches, $text, $attributes)
     {
         $attributes['attributes'] = ['alt' => $attributes['__default']];
-        return $this->generateResponsiveImageMarkup($this->content, "np_images/{$matches['image']}", $this->collateAttributes($attributes));
+        return $this->generateResponsiveImageMarkup($this->content, "_foonoo/images/{$matches['image']}", $this->collateAttributes($attributes));
     }
 
     /**
@@ -326,9 +326,9 @@ class ResponsiveImagesPlugin extends Plugin
      */
     private function writeImage($site, $image, $width, $format, $aspect): string
     {
-        $filename = substr($image->getImageFilename(), strlen($site->getSourcePath("np_images")) + 1);
+        $filename = substr($image->getImageFilename(), strlen($site->getSourcePath("_foonoo/images")) + 1);
         $filename = $site->getSourcePath(
-            $this->getOption('image_path', 'np_images/responsive_images/') .
+            $this->getOption('image_path', '_foonoo/images/responsive_images/') .
             str_replace("/", "-", $filename) . "@{$width}px.$format"
         );
         if (file_exists($filename) && filemtime($image->getImageFilename()) < filemtime($filename)) {
