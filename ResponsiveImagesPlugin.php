@@ -99,6 +99,7 @@ class ResponsiveImagesPlugin extends Plugin
         try {
             $dom = $event->getDOM();
         } catch (\TypeError $error) {
+            $this->errOut("Skipping non DOM content [{$event->getContent()->getDestination()}]");
             return;
         }
         $xpath = new \DOMXPath($dom);
@@ -239,6 +240,11 @@ class ResponsiveImagesPlugin extends Plugin
                 $webps[] = [substr($this->writeImage($site, $image, $size * 2, 'webp', $aspect), $lenSourcePath), 2];
             }
             $sizes[] = ['jpeg_srcset' => $jpegs, 'webp_srcset' => $webps, 'max_width' => $size];
+            
+            // special case to break when step is 0
+            if($step == 0) {
+                break;
+            }
         }
 
         return [$sizes, $jpeg];
@@ -289,11 +295,12 @@ class ResponsiveImagesPlugin extends Plugin
                 if ($extension == 'jpeg' || $extension == 'jpg') {
                     $defaultImage = $imagePath;
                 }
-
                 $args = [
                     'sources' => $sources,
-                    'image_path' => $defaultImage, 'alt' => $attributes['attributes']['alt'] ?? "",
-                    'site_path' => $templateVariables['site_path'],
+                    'image_path' => $defaultImage, 
+                    'alt' => $attributes['attributes']['alt'] ?? "",
+                    // replace the site path with a dot in cases where we're working on the root site
+                    'site_path' => $templateVariables['site_path'] == "" ? "." : $templateVariables['site_path'],
                     'width' => $image->getImageWidth(),
                     'height' => $image->getImageHeight(),
                     'attrs' => $attributes
@@ -317,6 +324,8 @@ class ResponsiveImagesPlugin extends Plugin
     }
 
     /**
+     * Write images to file.
+     * 
      * @param $site
      * @param $image
      * @param $width
@@ -340,7 +349,6 @@ class ResponsiveImagesPlugin extends Plugin
         $image->setImageCompressionQuality($this->getOption("compression_quality", 60));
         $this->stdOut("Writing image $filename\n");
         $image->writeImage($filename);
-
         return $filename;
     }
 }
