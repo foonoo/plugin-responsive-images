@@ -231,9 +231,9 @@ class ResponsiveImagesPlugin extends Plugin
             $size = round($i);
             $jpegs = [];
             $webps = [];
-            $jpeg = substr($this->writeImage($site, $image, $size, 'jpeg', $aspect), $lenSourcePath);
+            $jpeg = substr($this->writeImage($site, $image, $size, 'jpeg', $aspect), $lenSourcePath + 1);
             $jpegs[] = [$jpeg];
-            $webps[] = [substr($this->writeImage($site, $image, $size, 'webp', $aspect), $lenSourcePath)];
+            $webps[] = [substr($this->writeImage($site, $image, $size, 'webp', $aspect), $lenSourcePath + 1)];
 
             if ($this->getOption('hidpi', false) && $size * 2 < $width) {
                 $jpegs[] = [substr($this->writeImage($site, $image, $size * 2, 'jpeg', $aspect), $lenSourcePath), 2];
@@ -291,16 +291,12 @@ class ResponsiveImagesPlugin extends Plugin
                 $templateVariables = $site->getTemplateData($content->getFullDestination());
                 list($sources, $defaultImage) = $this->generateLinearSteppedImages($site, $image, $attributes);
 
-                $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-                if ($extension == 'jpeg' || $extension == 'jpg') {
-                    $defaultImage = $imagePath;
-                }
                 $args = [
                     'sources' => $sources,
                     'image_path' => $defaultImage, 
                     'alt' => $attributes['attributes']['alt'] ?? "",
                     // replace the site path with a dot in cases where we're working on the root site
-                    'site_path' => $templateVariables['site_path'] == "" ? "." : $templateVariables['site_path'],
+                    'site_path' => $templateVariables['site_path'] == "" ? "./" : $templateVariables['site_path'],
                     'width' => $image->getImageWidth(),
                     'height' => $image->getImageHeight(),
                     'attrs' => $attributes
@@ -319,7 +315,7 @@ class ResponsiveImagesPlugin extends Plugin
      */
     private function getMarkupGenerator($matches, $text, $attributes)
     {
-        $attributes['attributes'] = ['alt' => $attributes['__default']];
+        $attributes['attributes'] = ['alt' => $attributes['__default'] ?? ""];
         return $this->generateResponsiveImageMarkup($this->content, "_foonoo/images/{$matches['image']}", $this->collateAttributes($attributes));
     }
 
