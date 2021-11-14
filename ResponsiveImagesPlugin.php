@@ -277,7 +277,8 @@ class ResponsiveImagesPlugin extends Plugin
         // serialized json attributes are added to the cache key to force cache invalidations
         // when image attributes change
         $jsonAttributes = \json_encode($attributes);
-        return $site->getCache()->get("responsive-image:$imagePath:$jsonAttributes:{$content->getDestination()}",
+        return $site->getCache()->get(
+            "responsive-image:$imagePath:$jsonAttributes:{$content->getDestination()}:{$this->getOption('hidpi', false)}",
             function () use ($site, $content, $imagePath, $attributes) {
                 $filename = $site->getSourcePath($imagePath);
 
