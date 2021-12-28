@@ -217,7 +217,7 @@ class ResponsiveImagesPlugin extends Plugin
      */
     private function generateLinearSteppedImages(AbstractSite $site, \Imagick $image, array $attributes)
     {
-        $sizes = [];
+        $sources = [];
         $jpeg = null;
 
         $width = $image->getImageWidth();
@@ -225,21 +225,22 @@ class ResponsiveImagesPlugin extends Plugin
         $min = $this->getOption('min-width', 200);
         $max = $attributes['max-width'] ?? $this->getOption('max-width', $width);
         $step = ($max - $min) / $this->getOption('num-steps', 7);
-        $lenSourcePath = strlen($site->getSourcePath("_foonoo"));
+        $lenSourcePath = strlen($site->getSourcePath("_foonoo")) + 1;
 
         for ($i = $min; $i < $max || abs($i - $max) < 0.0001; $i += $step) {
             $size = round($i);
             $jpegs = [];
             $webps = [];
-            $jpeg = substr($this->writeImage($site, $image, $size, 'jpeg', $aspect), $lenSourcePath + 1);
+            // Extract the default fallback JPEG
+            $jpeg = substr($this->writeImage($site, $image, $size, 'jpeg', $aspect), $lenSourcePath);
             $jpegs[] = [$jpeg];
-            $webps[] = [substr($this->writeImage($site, $image, $size, 'webp', $aspect), $lenSourcePath + 1)];
+            $webps[] = [substr($this->writeImage($site, $image, $size, 'webp', $aspect), $lenSourcePath)];
 
             if ($this->getOption('hidpi', false) && $size * 2 < $width) {
                 $jpegs[] = [substr($this->writeImage($site, $image, $size * 2, 'jpeg', $aspect), $lenSourcePath), 2];
                 $webps[] = [substr($this->writeImage($site, $image, $size * 2, 'webp', $aspect), $lenSourcePath), 2];
             }
-            $sizes[] = ['jpeg_srcset' => $jpegs, 'webp_srcset' => $webps, 'max_width' => $size];
+            $sources[] = ['jpeg_srcset' => $jpegs, 'webp_srcset' => $webps, 'max_width' => $size];
             
             // special case to break when step is 0
             if($step == 0) {
@@ -247,7 +248,7 @@ class ResponsiveImagesPlugin extends Plugin
             }
         }
 
-        return [$sizes, $jpeg];
+        return [$sources, $jpeg];
     }
 
     private function makeImageDirectory(AbstractSite $site): void
