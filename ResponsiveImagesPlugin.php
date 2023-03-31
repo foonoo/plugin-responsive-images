@@ -185,7 +185,7 @@ class ResponsiveImagesPlugin extends Plugin
      */
     private function registerParserTags(PluginsInitialized $event)
     {
-        $event->getTagParser()->registerTag("/(?<image>.*\.(jpeg|jpg|png|gif|webp))/", 10,
+        $event->getTagParser()->registerTag("(?<image>.*\.(jpeg|jpg|png|gif|webp))", 10,
             function ($matches, $text, $attributes) {
                 return $this->getMarkupGenerator($matches, $text, $attributes);
             },
