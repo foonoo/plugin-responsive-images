@@ -188,14 +188,18 @@ class ResponsiveImagesPlugin extends Plugin
     {
         /** @var TagParser */
         $tagParser = $event->getTagParser();
-        $imgLinkRegex = "(?<image>.*\.(jpeg|jpg|png|gif|webp))";
+        $imgLinkRegex = "(?<path>.*\.(jpeg|jpg|png|gif|webp))";
 
-        $tagParser->registerTag(
-            ["link" => $imgLinkRegex], 1000, fn($args) => $this->getMarkupGenerator($args), 'responsive image'
-        );
-        $tagParser->registerTag(
-            ["alt" => TagToken::TEXT, "link" => $imgLinkRegex], 1000, fn($args) => $this->getMarkupGenerator($args), 'responsive image'
-        );
+        $tags = [
+            ["url" => $imgLinkRegex], // Register the tag for just a single image URL [[url.img]]
+            ["url" => $imgLinkRegex, "args" => TagToken::ARGS_LIST],
+            ["alt" => TagToken::TEXT, "url" => $imgLinkRegex], // Register the tag for a description and its URL [[description|url.img]]
+            ["alt" => TagToken::TEXT, "url" => $imgLinkRegex, TagToken::ARGS_LIST],
+        ];
+
+        foreach($tags as $tag) {
+            $tagParser->registerTag($tag, 1000, fn($args) => $this->getMarkupGenerator($args), 'responsive image');    
+        }
     }
 
     /**
@@ -301,7 +305,7 @@ class ResponsiveImagesPlugin extends Plugin
                 $args = [
                     'sources' => $sources,
                     'image_path' => $defaultImage, 
-                    'alt' => $attributes['attributes']['alt'] ?? "",
+                    'alt' => $attributes['alt'] ?? "",
                     // replace the site path with a dot in cases where we're working on the root site
                     'site_path' => $templateVariables['site_path'] == "" ? "./" : $templateVariables['site_path'],
                     'width' => $image->getImageWidth(),
@@ -322,8 +326,12 @@ class ResponsiveImagesPlugin extends Plugin
      */
     private function getMarkupGenerator($args)
     {
-        $attributes['attributes'] = ['alt' => $args['alt'] ?? ""];
-        return $this->generateResponsiveImageMarkup($this->content, "_foonoo/images/{$args['link']['image']}", $this->collateAttributes($attributes));
+        $attributes = $args['__args'] ?? [];
+        $attributes['alt'] = $args['alt'];
+        return $this->generateResponsiveImageMarkup(
+            $this->content, "_foonoo/images/{$args['url']['path']}", 
+            $this->collateAttributes($attributes)
+        );
     }
 
     /**
