@@ -13,6 +13,7 @@ use foonoo\events\SiteWriteStarted;
 use foonoo\events\ThemeLoaded;
 use foonoo\Plugin;
 use foonoo\sites\AbstractSite;
+use foonoo\text\TagToken;
 
 
 /**
@@ -185,11 +186,15 @@ class ResponsiveImagesPlugin extends Plugin
      */
     private function registerParserTags(PluginsInitialized $event)
     {
-        $event->getTagParser()->registerTag("(?<image>.*\.(jpeg|jpg|png|gif|webp))", 10,
-            function ($matches, $text, $attributes) {
-                return $this->getMarkupGenerator($matches, $text, $attributes);
-            },
-            'responsive image'
+        /** @var TagParser */
+        $tagParser = $event->getTagParser();
+        $imgLinkRegex = "(?<image>.*\.(jpeg|jpg|png|gif|webp))";
+
+        $tagParser->registerTag(
+            ["link" => $imgLinkRegex], 1000, fn($args) => $this->getMarkupGenerator($args), 'responsive image'
+        );
+        $tagParser->registerTag(
+            ["alt" => TagToken::TEXT, "link" => $imgLinkRegex], 1000, fn($args) => $this->getMarkupGenerator($args), 'responsive image'
         );
     }
 
@@ -315,10 +320,10 @@ class ResponsiveImagesPlugin extends Plugin
      * @return string
      * @throws \ImagickException
      */
-    private function getMarkupGenerator($matches, $text, $attributes)
+    private function getMarkupGenerator($args)
     {
-        $attributes['attributes'] = ['alt' => $attributes['__default'] ?? ""];
-        return $this->generateResponsiveImageMarkup($this->content, "_foonoo/images/{$matches['image']}", $this->collateAttributes($attributes));
+        $attributes['attributes'] = ['alt' => $args['alt'] ?? ""];
+        return $this->generateResponsiveImageMarkup($this->content, "_foonoo/images/{$args['link']['image']}", $this->collateAttributes($attributes));
     }
 
     /**
@@ -341,9 +346,9 @@ class ResponsiveImagesPlugin extends Plugin
         if (file_exists($filename) && filemtime($image->getImageFilename()) < filemtime($filename)) {
             return $filename;
         }
-        $image = $image->clone();
+        $image = clone $image;
         $width = round($width);
-        $image->scaleImage($width, $width / $aspect);
+        $image->scaleImage($width, (int) round($width / $aspect));
         $image->setImageCompressionQuality($this->getOption("compression_quality", 60));
         $this->stdOut("Writing image $filename\n");
         $image->writeImage($filename);
