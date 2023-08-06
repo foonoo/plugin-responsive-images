@@ -36,11 +36,16 @@ class ResponsiveImagesPlugin extends Plugin
     public function getEvents()
     {
         return [
-            PluginsInitialized::class => function (PluginsInitialized $event) { $this->registerParserTags($event); },
-            ThemeLoaded::class => function (ThemeLoaded $event) { $this->registerTemplates($event); },
-            ContentOutputGenerated::class => function (ContentOutputGenerated $event) { $this->processMarkup($event); },
-            SiteWriteStarted::class => function (SiteWriteStarted $event) { $this->setActiveSite($event); },
-            ContentGenerationStarted::class => function (ContentGenerationStarted $event) { $this->setActiveContent($event); }
+            // PluginsInitialized::class => function (PluginsInitialized $event) { $this->registerParserTags($event); },
+            // ThemeLoaded::class => function (ThemeLoaded $event) { $this->registerTemplates($event); },
+            // ContentOutputGenerated::class => function (ContentOutputGenerated $event) { $this->processMarkup($event); },
+            // SiteWriteStarted::class => function (SiteWriteStarted $event) { $this->setActiveSite($event); },
+            // ContentGenerationStarted::class => function (ContentGenerationStarted $event) { $this->setActiveContent($event); }
+            PluginsInitialized::class => fn (PluginsInitialized $event) => $this->registerParserTags($event),
+            ThemeLoaded::class => fn (ThemeLoaded $event) => $this->registerTemplates($event),
+            ContentOutputGenerated::class => fn (ContentOutputGenerated $event) => $this->processMarkup($event),
+            SiteWriteStarted::class => fn (SiteWriteStarted $event) => $this->setActiveSite($event),
+            ContentGenerationStarted::class => fn (ContentGenerationStarted $event) => $this->setActiveContent($event)
         ];
     }
 
@@ -102,6 +107,10 @@ class ResponsiveImagesPlugin extends Plugin
         } catch (\TypeError $error) {
             $this->errOut("Skipping non DOM content [{$event->getContent()->getDestination()}]");
             return;
+        }
+        if($dom == null) {
+            $this->errOut("Skipping non DOM content [{$event->getContent()->getDestination()}]");
+            return;            
         }
         $xpath = new \DOMXPath($dom);
         $imgs = $xpath->query("//img[@fn-responsive]");
