@@ -9,6 +9,7 @@ use ntentan\utils\Filesystem;
 use foonoo\events\ContentOutputGenerated;
 use foonoo\events\ContentGenerationStarted;
 use foonoo\events\PluginsInitialized;
+use foonoo\events\SiteObjectCreated;
 use foonoo\events\SiteWriteStarted;
 use foonoo\events\ThemeLoaded;
 use foonoo\Plugin;
@@ -39,7 +40,8 @@ class ResponsiveImagesPlugin extends Plugin
             PluginsInitialized::class => fn (PluginsInitialized $event) => $this->registerParserTags($event),
             ThemeLoaded::class => fn (ThemeLoaded $event) => $this->registerTemplates($event),
             ContentOutputGenerated::class => fn (ContentOutputGenerated $event) => $this->processMarkup($event),
-            SiteWriteStarted::class => fn (SiteWriteStarted $event) => $this->setActiveSite($event),
+            //SiteWriteStarted::class => fn (SiteWriteStarted $event) => $this->setActiveSite($event),
+            SiteObjectCreated::class => fn (SiteObjectCreated $event) => $this->setActiveSite($event),
             ContentGenerationStarted::class => fn (ContentGenerationStarted $event) => $this->setActiveContent($event)
         ];
     }
@@ -49,7 +51,7 @@ class ResponsiveImagesPlugin extends Plugin
      * This event handler helps the plugin keep track of the current site being processed
      * @param SiteWriteStarted $event
      */
-    private function setActiveSite(SiteWriteStarted $event)
+    private function setActiveSite(SiteObjectCreated $event)
     {
         $this->site = $event->getSite();
         $this->makeImageDirectory($this->site);
@@ -120,7 +122,7 @@ class ResponsiveImagesPlugin extends Plugin
 
         /** @var $img \DOMNode */
         foreach ($imgs as $img) {
-            $sitePath = $site->getTemplateData($site->getDestinationPath($page->getDestination()))['site_path'];
+            //$sitePath = $site->getTemplateData($site->getDestinationPath($page->getDestination()))['site_path'];
             list($attributes, $nodeAttributes) = $this->extractDomAttributes($img->attributes);
             $attributes['attributes'] = $nodeAttributes;
             $src = $nodeAttributes['src'];
@@ -130,7 +132,7 @@ class ResponsiveImagesPlugin extends Plugin
                 continue;
             }
 
-            $src = substr($src, strlen($sitePath));
+            //$src = substr($src, strlen($sitePath));
             $markup = $this->generateResponsiveImageMarkup($page, "_foonoo/$src", $this->collateAttributes($attributes));
             $newDom = new \DOMDocument();
             @$newDom->loadHTML($markup);
@@ -249,7 +251,7 @@ class ResponsiveImagesPlugin extends Plugin
             $jpegs[] = [$jpeg];
             $webps[] = [substr($this->writeImage($site, $image, $size, 'webp', $aspect), $lenSourcePath)];
 
-            if ($this->getOption('hidpi', false) && $size * 2 < $width) {
+            if (array_search($this->getOption('hidpi', false), [true, "true", ""]) !== false && $size * 2 < $width) {
                 $jpegs[] = [substr($this->writeImage($site, $image, $size * 2, 'jpeg', $aspect), $lenSourcePath), 2];
                 $webps[] = [substr($this->writeImage($site, $image, $size * 2, 'webp', $aspect), $lenSourcePath), 2];
             }
@@ -303,7 +305,7 @@ class ResponsiveImagesPlugin extends Plugin
 
                 $image = new \Imagick($filename);
                 $this->stdOut("Generating responsive images for {$filename}\n", Io::OUTPUT_LEVEL_1);
-                $templateVariables = $site->getTemplateData($content->getFullDestination());
+                $templateVariables = $site->getTemplateData($content->getDestination());
                 list($sources, $defaultImage) = $this->generateLinearSteppedImages($site, $image, $attributes);
 
                 $args = [
