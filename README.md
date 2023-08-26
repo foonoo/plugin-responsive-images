@@ -1,10 +1,6 @@
 # Responsive Images Plugin
 The idea behind responsive images is simple: your site should attempt serving the right image that works best the end user's display (both in terms of resolution and pixel density). In more obvious—and also simpler—terms, you serve a smaller image for a smaller screen, or a larger one for a larger screen, to give your site a more efficient and responsive browsing experience. 
 
-[[block:note]]
-For a more detailed explanation of how responsive images work, Mozilla has a very good writeup on how they're implemented at the HTML level [[here|https://developer.mozilla.org/en-US/docs/Learn/HTML/Multimedia_and_embedding/Responsive_images]]. This information may be invaluable to anyone who wants to implement responsive images with foonoo, regardless of whether you'll be using this plugin or not.
-[[/block:note]]
-
 Properly implementing image responsiveness requires having images of different resolutions, which can be served for the different display sizes, already prepared. Setting this up could be a daunting task, however, and that's where this plugin comes in. All this plugin requires is you provide a high resolution version of your image, and it will generate all the intermediate low-resolution images, as well as the HTML code needed to make it work.
 
 ## What does the plugin do
