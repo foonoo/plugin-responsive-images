@@ -40,7 +40,6 @@ class ResponsiveImagesPlugin extends Plugin
             PluginsInitialized::class => fn (PluginsInitialized $event) => $this->registerParserTags($event),
             ThemeLoaded::class => fn (ThemeLoaded $event) => $this->registerTemplates($event),
             ContentOutputGenerated::class => fn (ContentOutputGenerated $event) => $this->processMarkup($event),
-            //SiteWriteStarted::class => fn (SiteWriteStarted $event) => $this->setActiveSite($event),
             SiteObjectCreated::class => fn (SiteObjectCreated $event) => $this->setActiveSite($event),
             ContentGenerationStarted::class => fn (ContentGenerationStarted $event) => $this->setActiveContent($event)
         ];
@@ -122,7 +121,7 @@ class ResponsiveImagesPlugin extends Plugin
 
         /** @var $img \DOMNode */
         foreach ($imgs as $img) {
-            //$sitePath = $site->getTemplateData($site->getDestinationPath($page->getDestination()))['site_path'];
+            $sitePath = $site->getTemplateData($page)['site_path'];
             list($attributes, $nodeAttributes) = $this->extractDomAttributes($img->attributes);
             $attributes['attributes'] = $nodeAttributes;
             $src = $nodeAttributes['src'];
@@ -132,7 +131,7 @@ class ResponsiveImagesPlugin extends Plugin
                 continue;
             }
 
-            //$src = substr($src, strlen($sitePath));
+            $src = $sitePath == "./" || $sitePath == "."  ? $src : substr($src, strlen($sitePath));
             $markup = $this->generateResponsiveImageMarkup($page, "_foonoo/$src", $this->collateAttributes($attributes));
             $newDom = new \DOMDocument();
             @$newDom->loadHTML($markup);
@@ -305,7 +304,7 @@ class ResponsiveImagesPlugin extends Plugin
 
                 $image = new \Imagick($filename);
                 $this->stdOut("Generating responsive images for {$filename}\n", Io::OUTPUT_LEVEL_1);
-                $templateVariables = $site->getTemplateData($content->getDestination());
+                $templateVariables = $site->getTemplateData($content);
                 list($sources, $defaultImage) = $this->generateLinearSteppedImages($site, $image, $attributes);
 
                 $args = [
