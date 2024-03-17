@@ -1,6 +1,6 @@
 <?php
 
-namespace foonoo\plugins\contrib\responsive_images;
+namespace foonoo\plugins\foonoo\responsive_images;
 
 use clearice\io\Io;
 use foonoo\content\Content;
