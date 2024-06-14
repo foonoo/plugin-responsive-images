@@ -332,7 +332,7 @@ class ResponsiveImagesPlugin extends Plugin
     private function getMarkupGenerator($args)
     {
         $attributes = $args['__args'] ?? [];
-        $attributes['alt'] = $args['alt'];
+        $attributes['alt'] = $args['alt'] ?? "";
         return $this->generateResponsiveImageMarkup(
             $this->content, "_foonoo/images/{$args['url']['path']}", 
             $this->collateAttributes($attributes)
