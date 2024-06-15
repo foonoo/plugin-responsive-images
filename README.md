@@ -39,17 +39,17 @@ plugins:
         max-width: 800
 ```
 
-### Using Parameter Classes
-In some cases, you may have different categories of images that need responsive parameters. For instance, you could have thumbnails that are of a particular width, along with banners that may be of other widths. Here, setting parameters directly on individual tags could be laborious. Also, having defaults that are automatically applied to all images may not be helpful. To improve this situation, the responsive images plugin provides parameter classes that groups different parameters for selective use.
+### Using Parameter Presets
+In some cases, you may have different categories of images that need responsive parameters. For instance, you could have thumbnails that are of a particular width, along with banners that may be of other widths. Here, setting parameters directly on individual tags could be laborious. Also, having defaults that are automatically applied to all images may not be helpful. To improve this situation, the responsive images plugin provides parameter presets that groups different parameters for selective use.
 
-Parameter classes are actually analogous to—and were inspired by—CSS classes. To use parameter classes, you define a class in your `site.yml` with its own parameters, and then you apply this class to the in-content tags. For example, the following configuration ...
+Parameter presets are actually analogous to—and were inspired by—CSS classes. To use parameter presets, you define a presets in your `site.yml` with its own parameters, and then you apply this preset to the in-content tags. For example, the following configuration ...
 
 ```yml
 plugins:
     - foonoo/responsive_images:
         num-steps: 7
         hidpi: true
-        classes:
+        presets:
             banner:
                 max-width: 650
             preview:
@@ -57,16 +57,16 @@ plugins:
             full:
                 max-width: 940
 ```
-... defines three classes with different `max-width` values. To apply these to any tags, you could use ...
+... defines three presets with different `max-width` values. To apply these to any tags, you could use ...
 
 ```
-[[This is a responsive image with a class | some_responsive_image.png | class:full]]
+[[This is a responsive image with a preset | some_responsive_image.png | preset:full]]
 ```
 
 ... or you could also use with HTML tags ...
 
 ```html
-<img fn-responsive fn-responsive-class="preview" src="some_responsive_image.png" />
+<img fn-responsive fn-responsive-preset="preview" src="some_responsive_image.png" />
 ```
 
 Classes may also be useful when you want to change the parameters of responsive images in bulk. Defining the class onces and adding the properties will alwasy be easier than editting a bunch of tags en masse.
@@ -76,10 +76,9 @@ Classes may also be useful when you want to change the parameters of responsive 
 
  Parameter            | Default    | Description
 --------------------- |------------|-------------------------------
-`classes`             | None       | A list of classes and their associated parameters. See the example on parameter classes above for more details.
-`compression_quality` | `70`       | Specifies the compression quality of the intermediate images generated. This is specified as a value between `0` and `100`.
+`presets`             | None       | A list of presets and their associated parameters. See the example on parameter classes above for more details.
+`compression-quality` | `70`       | Specifies the compression quality of the intermediate images generated. This is specified as a value between `0` and `100`.
 `hidpi`               | `false`    | A boolean flag that determnies whether high DPI versions of the images are generated.
-`image-path`          |            | Specifies the location in which the rendered intermediary images will be shown.
 `max-width`           | Image width| Specifies the maximum width an image could possibly have on the final website.
 `min-width`           | 200px      | Specifies the smallest sized image the responsive image should generate.
 `num-steps`           | 7          | Specifies the number of images to be generated.

@@ -22,6 +22,8 @@ use foonoo\text\TagToken;
  */
 class ResponsiveImagesPlugin extends Plugin
 {
+    private const TAGS = ['min-width', 'max-width', 'num-steps', 'frame', 'loading', 'preset', 'hidpi', 'compression-quality', 'alt'];
+
     private $templateEngine;
 
     /**
@@ -149,8 +151,8 @@ class ResponsiveImagesPlugin extends Plugin
     }
 
     /**
-     * Collate attributes so those from tags, classes, and plugin options are combined in the right order.
-     * Attribute combination follows this hierarchy: tag supercedes class, which further supercedes plugin. The method
+     * Collate attributes so those from tags, presets, and plugin options are combined in the right order.
+     * Attribute combination follows this hierarchy: tag supercedes preset, which further supercedes plugin. The method
      * that consumes the plugin is left to specify the default.
      *
      * @param $attributes array
@@ -163,20 +165,24 @@ class ResponsiveImagesPlugin extends Plugin
 
         // Merge on these specific tags
         $tags = ['min-width', 'max-width', 'num-steps', 'frame', 'loading'];
-        $classes = $this->getOption('classes');
-        $classAttributes = [];
+        $presets = $this->getOption('presets');
+        $presetAttributes = [];
 
-        if($classes != null && isset($attributes['class']) && isset($classes[$attributes['class']])) {
-            $classAttributes = $classes[$attributes['class']];
-        } else if ($classes != null && isset($attributes['class'])) {
-            $this->errOut("Class [{$attributes['class']}] is not configured.");
+        if($presets != null && isset($attributes['preset']) && isset($presets[$attributes['preset']])) {
+            $preset = $attributes['preset'];
+            $presetAttributes = $presets[$preset];
+            $attributes['attributes']['class'] = 
+                (isset($attributes['attributes']['class']) ? $attributes['attributes']['class'] : "") 
+                . " fn-preset-${preset}";
+        } else if ($presets != null && isset($attributes['preset'])) {
+            $this->errOut("Preset [{$attributes['preset']}] is not configured.");
         }
 
         foreach ($tags as $tag) {
             if(isset($attributes[$tag])) {
                 continue;
-            } else if (isset($classAttributes[$tag])) {
-                $attributes[$tag] = $classAttributes[$tag];
+            } else if (isset($presetAttributes[$tag])) {
+                $attributes[$tag] = $presetAttributes[$tag];
             } else if ($this->getOption($tag) !== null) {
                 $attributes[$tag] = $this->getOption($tag);
             }
@@ -333,6 +339,12 @@ class ResponsiveImagesPlugin extends Plugin
     {
         $attributes = $args['__args'] ?? [];
         $attributes['alt'] = $args['alt'] ?? "";
+        $attributes['attributes'] = $attributes;
+
+        foreach(self::TAGS as $tag) {
+            unset($attributes['attributes'][$tag]);
+        }
+
         return $this->generateResponsiveImageMarkup(
             $this->content, "_foonoo/images/{$args['url']['path']}", 
             $this->collateAttributes($attributes)
@@ -362,7 +374,7 @@ class ResponsiveImagesPlugin extends Plugin
         $image = clone $image;
         $width = round($width);
         $image->scaleImage($width, (int) round($width / $aspect));
-        $image->setImageCompressionQuality($this->getOption("compression_quality", 60));
+        $image->setImageCompressionQuality($this->getOption("compression-quality", 70));
         $this->stdOut("Writing image $filename\n");
         $image->writeImage($filename);
         return $filename;
