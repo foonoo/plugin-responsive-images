@@ -15,6 +15,7 @@ use foonoo\events\ThemeLoaded;
 use foonoo\Plugin;
 use foonoo\sites\AbstractSite;
 use foonoo\text\TagToken;
+use foonoo\text\TemplateEngine;
 
 
 /**
@@ -24,19 +25,19 @@ class ResponsiveImagesPlugin extends Plugin
 {
     private const TAGS = ['min-width', 'max-width', 'num-steps', 'frame', 'loading', 'preset', 'hidpi', 'compression-quality', 'alt'];
 
-    private $templateEngine;
+    private TemplateEngine $templateEngine;
 
     /**
      * @var AbstractSite
      */
-    private $site;
+    private AbstractSite $site;
 
     /**
      * @var Content
      */
-    private $content;
+    private Content $content;
 
-    public function getEvents()
+    public function getEvents() : array
     {
         return [
             PluginsInitialized::class => fn (PluginsInitialized $event) => $this->registerParserTags($event),
@@ -47,12 +48,10 @@ class ResponsiveImagesPlugin extends Plugin
         ];
     }
 
-    /**.
-     *
+    /**
      * This event handler helps the plugin keep track of the current site being processed
-     * @param SiteWriteStarted $event
      */
-    private function setActiveSite(SiteObjectCreated $event)
+    private function setActiveSite(SiteObjectCreated $event) : void
     {
         $this->site = $event->getSite();
         $this->makeImageDirectory($this->site);
@@ -61,10 +60,8 @@ class ResponsiveImagesPlugin extends Plugin
     /**
      * This event handler helps the plugin keep track of the current current being processed.
      * This is necessary for the cases where responsive images are being generated from tags.
-     *
-     * @param ContentGenerationStarted $event
      */
-    private function setActiveContent(ContentGenerationStarted $event)
+    private function setActiveContent(ContentGenerationStarted $event) : void
     {
         $this->content = $event->getContent();
     }
@@ -98,7 +95,7 @@ class ResponsiveImagesPlugin extends Plugin
      * @param ContentOutputGenerated $event
      * @throws \ImagickException
      */
-    private function processMarkup(ContentOutputGenerated $event)
+    private function processMarkup(ContentOutputGenerated $event) : void
     {
         try {
             $dom = $event->getDOM();
@@ -195,7 +192,7 @@ class ResponsiveImagesPlugin extends Plugin
      *
      * @param PluginsInitialized $event
      */
-    private function registerParserTags(PluginsInitialized $event)
+    private function registerParserTags(PluginsInitialized $event) : void
     {
         /** @var TagParser */
         $tagParser = $event->getTagParser();
@@ -235,7 +232,7 @@ class ResponsiveImagesPlugin extends Plugin
      * @return array
      * @throws \ImagickException
      */
-    private function generateLinearSteppedImages(AbstractSite $site, \Imagick $image, array $attributes)
+    private function generateLinearSteppedImages(AbstractSite $site, \Imagick $image, array $attributes) : array
     {
         $sources = [];
         $jpeg = null;
@@ -244,6 +241,7 @@ class ResponsiveImagesPlugin extends Plugin
         $aspect = $width / $image->getImageHeight();
         $min = $this->getOption('min-width', 200);
         $max = $attributes['max-width'] ?? $this->getOption('max-width', $width);
+        $backgroundColor = $attributes['background-color'] ?? $this->getOption('background-color', 'white');
         $step = ($max - $min) / $this->getOption('num-steps', 7);
         $lenSourcePath = strlen($site->getSourcePath("_foonoo")) + 1;
 
@@ -252,12 +250,12 @@ class ResponsiveImagesPlugin extends Plugin
             $jpegs = [];
             $webps = [];
             // Extract the default fallback JPEG
-            $jpeg = substr($this->writeImage($site, $image, $size, 'jpeg', $aspect), $lenSourcePath);
+            $jpeg = substr($this->writeImage($site, $image, $size, 'jpeg', $aspect, $backgroundColor), $lenSourcePath);
             $jpegs[] = [$jpeg];
             $webps[] = [substr($this->writeImage($site, $image, $size, 'webp', $aspect), $lenSourcePath)];
 
             if (array_search($this->getOption('hidpi', false), [true, "true", ""]) !== false && $size * 2 < $width) {
-                $jpegs[] = [substr($this->writeImage($site, $image, $size * 2, 'jpeg', $aspect), $lenSourcePath), 2];
+                $jpegs[] = [substr($this->writeImage($site, $image, $size * 2, 'jpeg', $aspect, $backgroundColor), $lenSourcePath), 2];
                 $webps[] = [substr($this->writeImage($site, $image, $size * 2, 'webp', $aspect), $lenSourcePath), 2];
             }
             $sources[] = ['jpeg_srcset' => $jpegs, 'webp_srcset' => $webps, 'max_width' => $size];
@@ -273,7 +271,9 @@ class ResponsiveImagesPlugin extends Plugin
 
     private function makeImageDirectory(AbstractSite $site): void
     {
-        $outputDir = Filesystem::directory($site->getSourcePath($this->getOption('image_path', '_foonoo/images/responsive_images/')));
+        $outputDir = Filesystem::directory($site->getSourcePath(
+            $this->getOption('image_path', '_foonoo/images/responsive_images/'))
+        );
         try {
             $outputDir->create(true);
         } catch (FileAlreadyExistsException $e) {
@@ -331,11 +331,13 @@ class ResponsiveImagesPlugin extends Plugin
     }
 
     /**
+     * Get an instance of the markup generator.
+     * 
      * @param $matches
      * @return string
      * @throws \ImagickException
      */
-    private function getMarkupGenerator($args)
+    private function getMarkupGenerator(array $args) : string
     {
         $attributes = $args['__args'] ?? [];
         $attributes['alt'] = $args['alt'] ?? "";
@@ -351,6 +353,15 @@ class ResponsiveImagesPlugin extends Plugin
         );
     }
 
+    private function applyBackgroundColor(\Imagick $image, string $backgroundColorDescription) {
+        $backgroundColor = new \ImagickPixel();
+        $backgroundColor->setColor($backgroundColorDescription);
+        $output = new \Imagick();
+        $output->newImage($image->getImageWidth(), $image->getImageHeight(), $backgroundColor, 'jpeg');
+        $output->compositeImage($image, \Imagick::COMPOSITE_DEFAULT, 0, 0);
+        return $output;
+    }
+
     /**
      * Write images to file.
      * 
@@ -361,7 +372,7 @@ class ResponsiveImagesPlugin extends Plugin
      * @param $aspect
      * @return string
      */
-    private function writeImage($site, $image, $width, $format, $aspect): string
+    private function writeImage(AbstractSite $site, \Imagick $image, float $width, string $format, float $aspect, string $backgroundColor=null): string
     {
         $filename = substr($image->getImageFilename(), strlen($site->getSourcePath("_foonoo/images")) + 1);
         $filename = $site->getSourcePath(
@@ -374,9 +385,13 @@ class ResponsiveImagesPlugin extends Plugin
         $image = clone $image;
         $width = round($width);
         $image->scaleImage($width, (int) round($width / $aspect));
+        if ($format == 'jpeg' && $image->getImageAlphaChannel() && $backgroundColor != null) {
+            $image = $this->applyBackgroundColor($image, $backgroundColor);
+        }
         $image->setImageCompressionQuality($this->getOption("compression-quality", 70));
         $this->stdOut("Writing image $filename\n");
         $image->writeImage($filename);
         return $filename;
     }
 }
+

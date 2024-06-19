@@ -82,3 +82,4 @@ Classes may also be useful when you want to change the parameters of responsive 
 `max-width`           | Image width| Specifies the maximum width an image could possibly have on the final website.
 `min-width`           | 200px      | Specifies the smallest sized image the responsive image should generate.
 `num-steps`           | 7          | Specifies the number of images to be generated.
+`background-color`    | white      | Specifies the default color to use as backgrounds for input images with alpha channels when writing them out to JPEGs without alpha channel.
