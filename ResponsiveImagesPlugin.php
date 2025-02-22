@@ -3,6 +3,8 @@
 namespace foonoo\plugins\foonoo\responsive_images;
 
 use clearice\io\Io;
+use Dom\HTMLDocument;
+use Dom\NamedNodeMap;
 use foonoo\content\Content;
 use ntentan\utils\exceptions\FileAlreadyExistsException;
 use ntentan\utils\Filesystem;
@@ -10,7 +12,6 @@ use foonoo\events\ContentOutputGenerated;
 use foonoo\events\ContentGenerationStarted;
 use foonoo\events\PluginsInitialized;
 use foonoo\events\SiteObjectCreated;
-use foonoo\events\SiteWriteStarted;
 use foonoo\events\ThemeLoaded;
 use foonoo\Plugin;
 use foonoo\sites\AbstractSite;
@@ -66,7 +67,7 @@ class ResponsiveImagesPlugin extends Plugin
         $this->content = $event->getContent();
     }
 
-    private function extractDomAttributes(\DOMNamedNodeMap $domAttributes) : array
+    private function extractDomAttributes(NamedNodeMap $domAttributes) : array
     {
         $fnResponsiveAttributes = [];
         $otherAttributes = [];
@@ -88,6 +89,22 @@ class ResponsiveImagesPlugin extends Plugin
         return [$fnResponsiveAttributes, $otherAttributes];
     }
 
+    private function makeFrame(HTMLDocument $dom, ?string $frame): array
+    {
+        $picture = $dom->createElement('picture');
+        if ($frame === 'figure') {
+            $frame = $dom->createElement('figure');
+            $frame->append($picture);
+        } else if ($frame === 'div') {
+            $frame = $dom->createElement('div');
+            $frame->append($picture);
+        } else {
+            $frame = $picture;
+        }
+
+        return [$frame, $picture];
+    }
+
     /**
      * Whenever content is generated, this event handler goes through the generated DOM tree and converts any image tags
      * that have an fn-responsive attribute.
@@ -107,8 +124,8 @@ class ResponsiveImagesPlugin extends Plugin
             $this->errOut("Skipping non DOM content [{$event->getContent()->getDestination()}]");
             return;            
         }
-        $xpath = new \DOMXPath($dom);
-        $imgs = $xpath->query("//img[@fn-responsive]");
+
+        $imgs = $dom->querySelectorAll("img[fn-responsive]");
 
         if ($imgs->length == 0) {
             return;
@@ -118,7 +135,7 @@ class ResponsiveImagesPlugin extends Plugin
         $page = $event->getContent();
         $this->makeImageDirectory($site);
 
-        /** @var $img \DOMNode */
+        /** @var $img \DOM\Node */
         foreach ($imgs as $img) {
             $sitePath = $site->getTemplateData($page)['site_path'];
             list($attributes, $nodeAttributes) = $this->extractDomAttributes($img->attributes);
@@ -131,19 +148,25 @@ class ResponsiveImagesPlugin extends Plugin
             }
 
             $src = $sitePath == "./" || $sitePath == "."  ? $src : substr($src, strlen($sitePath));
-            $markup = $this->generateResponsiveImageMarkup($page, "_foonoo/$src", $this->collateAttributes($attributes));
-            $newDom = new \DOMDocument();
-            @$newDom->loadHTML($markup);
-            $pictureElement = $newDom->getElementsByTagName('picture');
+            $collatedAttributes = $this->collateAttributes($attributes);
+            $markup = $this->generateResponsiveImageMarkup($page, "_foonoo/$src", $collatedAttributes);
+            list($frame, $picture) = $this->makeFrame($dom, $collatedAttributes['frame'] ?? null);
+            $picture->innerHTML = $markup;
+            $img->parentNode->replaceChild($frame, $img);
 
-            if ($pictureElement->length > 0) {
-                $pictureElement = $pictureElement->item(0);
-                $pictureElement = $dom->importNode($pictureElement, true);
-            } else {
-                $pictureElement = $dom->createTextNode($markup);
-            }
-
-            $img->parentNode->replaceChild($pictureElement, $img);
+//            $newDom = HTMLDocument::createFromString($markup, LIBXML_NOERROR);
+//            var_dump($newDom->saveHtml());
+//            $newDom = new \DOMDocument();
+//            @$newDom->loadHTML($markup);
+//            $pictureElement = $newDom->querySelector('picture');
+//            $pictureElement = $dom->im
+//            if ($pictureElement->length > 0) {
+//                $pictureElement = $pictureElement->item(0);
+//                $pictureElement = $dom->importNode($pictureElement, true);
+//            } else {
+//                $pictureElement = $dom->createTextNode($markup);
+//            }
+//            $img->parentNode->replaceChild($pictureElement, $img);
         }
     }
 
@@ -162,17 +185,17 @@ class ResponsiveImagesPlugin extends Plugin
 
         // Merge on these specific tags
         $tags = ['min-width', 'max-width', 'num-steps', 'frame', 'loading'];
-        $presets = $this->getOption('presets');
+        $presets = $this->getOption('classes');
         $presetAttributes = [];
 
-        if($presets != null && isset($attributes['preset']) && isset($presets[$attributes['preset']])) {
-            $preset = $attributes['preset'];
+        if($presets != null && isset($attributes['class']) && isset($presets[$attributes['class']])) {
+            $preset = $attributes['class'];
             $presetAttributes = $presets[$preset];
             $attributes['attributes']['class'] = 
                 (isset($attributes['attributes']['class']) ? $attributes['attributes']['class'] : "") 
                 . " fn-preset-${preset}";
-        } else if ($presets != null && isset($attributes['preset'])) {
-            $this->errOut("Preset [{$attributes['preset']}] is not configured.");
+        } else if ($presets != null && isset($attributes['class'])) {
+            $this->errOut("Preset class [{$attributes['class']}] is not configured.");
         }
 
         foreach ($tags as $tag) {
